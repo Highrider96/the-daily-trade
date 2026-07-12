@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
-import { Settings2, RefreshCw, TrendingUp, TrendingDown, AlertTriangle, Info, X, ChevronRight, Radio } from "lucide-react";
+import { Settings2, RefreshCw, TrendingUp, TrendingDown, AlertTriangle, Info, X, ChevronRight, Radio, History } from "lucide-react";
+import { Sparkline, ScoreHistoryChart } from "./Charts.jsx";
 
 // ---------- Instrument universe ----------
 const UNIVERSE = [
@@ -121,7 +122,9 @@ function analyzePair(candles, pair) {
   const sl = direction === "LONG" ? lastClose - 1.5 * atr : lastClose + 1.5 * atr;
   const tp = direction === "LONG" ? lastClose + 2.5 * atr : lastClose - 2.5 * atr;
 
-  return { pair, trendScore, momentumScore, volScore, composite, direction, entry, sl, tp, atr, rsi, histogram, sma20, sma50, lastDate: candles[candles.length - 1].date };
+  const spark = candles.slice(-100).map((c) => ({ date: c.date, close: c.close }));
+
+  return { pair, trendScore, momentumScore, volScore, composite, direction, entry, sl, tp, atr, rsi, histogram, sma20, sma50, spark, lastDate: candles[candles.length - 1].date };
 }
 
 // ---------- Alpha Vantage fetch ----------
@@ -207,6 +210,11 @@ function TopPickCard({ result, rank }) {
         <ConvictionDial score={result.composite} direction={result.direction} />
       </div>
 
+      <div>
+        <div className="text-[9px] text-[#6B7590] uppercase tracking-wide mb-1">Kursverlauf · 100 Tage</div>
+        <Sparkline data={result.spark} dec={dec} height={44} />
+      </div>
+
       <div className="grid grid-cols-3 gap-2 text-center">
         <div className="bg-[#F5F6FA] rounded-lg py-2 border border-[#ECEFF6]">
           <div className="text-[9px] text-[#6B7590] uppercase">Entry</div>
@@ -242,6 +250,7 @@ export default function FXSignalDesk() {
   const [results, setResults] = useState([]);
   const [error, setError] = useState("");
   const [lastRun, setLastRun] = useState(null);
+  const [history, setHistory] = useState(() => storageGet("fsd:history") ?? []);
 
   useEffect(() => { pruneOldCaches(); }, []);
 
@@ -289,6 +298,17 @@ export default function FXSignalDesk() {
 
     collected.sort((a, b) => b.composite - a.composite);
     setResults(collected);
+    if (collected.length > 0) {
+      const entry = {
+        date: todayKey(),
+        scores: Object.fromEntries(collected.map((r) => [r.pair, { c: Math.round(r.composite * 10) / 10, d: r.direction }])),
+      };
+      const nextHistory = [...history.filter((h) => h.date !== entry.date), entry]
+        .sort((a, b) => a.date.localeCompare(b.date))
+        .slice(-90);
+      setHistory(nextHistory);
+      storageSet("fsd:history", nextHistory);
+    }
     setLastRun(new Date());
     setProgressMsg("");
     setAnalyzing(false);
@@ -296,6 +316,7 @@ export default function FXSignalDesk() {
 
   const top3 = results.slice(0, 3);
   const rest = results.slice(3);
+  const historyPairs = UNIVERSE.map((u) => u.pair).filter((p) => history.some((h) => h.scores[p]));
 
   return (
     <div className="fsd-root min-h-screen bg-[#F7F8FC] text-[#1D2433] pb-16">
@@ -423,9 +444,26 @@ export default function FXSignalDesk() {
                     <span className="fsd-display text-sm font-medium">{r.pair}</span>
                     <span className="fsd-mono text-[10px]" style={{ color: r.direction === "LONG" ? "#2F9E6E" : "#D6503A" }}>{r.direction}</span>
                   </div>
-                  <span className="fsd-mono text-sm text-[#6B7590]">{Math.round(r.composite)}</span>
+                  <div className="flex items-center gap-4">
+                    <div className="w-24 hidden sm:block">
+                      <Sparkline data={r.spark} dec={decimalsFor(r.pair)} height={24} showArea={false} />
+                    </div>
+                    <span className="fsd-mono text-sm text-[#6B7590] w-8 text-right">{Math.round(r.composite)}</span>
+                  </div>
                 </div>
               ))}
+            </div>
+          </div>
+        )}
+
+        {/* Score history */}
+        {history.length > 0 && (
+          <div className="mt-8">
+            <h2 className="fsd-display text-sm font-semibold text-[#6B7590] uppercase tracking-wide mb-3 flex items-center gap-1.5">
+              <History size={14} /> Score-Verlauf
+            </h2>
+            <div className="bg-[#FFFFFF] border border-[#E1E5F0] rounded-xl p-5">
+              <ScoreHistoryChart history={history} pairs={historyPairs} />
             </div>
           </div>
         )}
