@@ -17,6 +17,14 @@ const UNIVERSE = [
 ];
 const DEFAULT_SELECTED = ["EUR/USD", "GBP/USD", "USD/JPY", "AUD/USD", "USD/CAD"];
 
+// Trade-Horizont: bestimmt, wie viele ATR (mittlere Tagesschwankung)
+// Stop und Ziel vom Einstieg entfernt liegen.
+const TRADE_STYLES = {
+  kurz: { label: "Kurzfristig", sl: 0.8, tp: 1.2, desc: "enge Level · grob 1–4 Handelstage" },
+  swing: { label: "Swing", sl: 1.5, tp: 2.5, desc: "Standard · grob 3–8 Handelstage" },
+  position: { label: "Position", sl: 2.5, tp: 4.5, desc: "weite Level · grob 1–3 Wochen" },
+};
+
 // ---------- Local storage helpers ----------
 function storageGet(key) {
   try {
@@ -119,12 +127,10 @@ function analyzePair(candles, pair) {
   const composite = trendScore * 0.4 + momentumScore * 0.4 + volScore * 0.2;
   const direction = directionSign > 0 ? "LONG" : "SHORT";
   const entry = lastClose;
-  const sl = direction === "LONG" ? lastClose - 1.5 * atr : lastClose + 1.5 * atr;
-  const tp = direction === "LONG" ? lastClose + 2.5 * atr : lastClose - 2.5 * atr;
 
   const spark = candles.slice(-100).map((c) => ({ date: c.date, close: c.close }));
 
-  return { pair, trendScore, momentumScore, volScore, composite, direction, entry, sl, tp, atr, rsi, histogram, sma20, sma50, spark, lastDate: candles[candles.length - 1].date };
+  return { pair, trendScore, momentumScore, volScore, composite, direction, entry, atr, rsi, histogram, sma20, sma50, spark, lastDate: candles[candles.length - 1].date };
 }
 
 // ---------- Alpha Vantage fetch ----------
@@ -190,10 +196,21 @@ function ConvictionDial({ score, direction }) {
   );
 }
 
-function TopPickCard({ result, rank }) {
+function TopPickCard({ result, rank, style }) {
   const isLong = result.direction === "LONG";
   const color = isLong ? "#2F9E6E" : "#D6503A";
   const dec = decimalsFor(result.pair);
+  const { sl: slMult, tp: tpMult } = TRADE_STYLES[style];
+  const sl = isLong ? result.entry - slMult * result.atr : result.entry + slMult * result.atr;
+  const tp = isLong ? result.entry + tpMult * result.atr : result.entry - tpMult * result.atr;
+  const pipSize = result.pair.includes("JPY") ? 0.01 : 0.0001;
+  const slPips = Math.round((slMult * result.atr) / pipSize);
+  const tpPips = Math.round((tpMult * result.atr) / pipSize);
+  const crv = (tpMult / slMult).toFixed(2).replace(".", ",");
+  // Grobe Haltedauer: Ziel liegt tpMult ATR entfernt; Kurse laufen selten
+  // geradlinig, daher Spanne von 1x bis 3x der Ideal-Dauer.
+  const minDays = Math.max(1, Math.ceil(tpMult));
+  const maxDays = Math.ceil(tpMult * 3);
   return (
     <div className="bg-[#FFFFFF] border border-[#E1E5F0] rounded-xl p-5 flex flex-col gap-4 relative overflow-hidden">
       <div className="absolute top-0 left-0 text-[10px] fsd-mono text-[#8892A8] px-3 py-1 border-r border-b border-[#E1E5F0] rounded-br-lg">
@@ -222,11 +239,13 @@ function TopPickCard({ result, rank }) {
         </div>
         <div className="bg-[#F5F6FA] rounded-lg py-2 border border-[#ECEFF6]">
           <div className="text-[9px] text-[#6B7590] uppercase">Stop</div>
-          <div className="fsd-mono text-sm text-[#D6503A]">{result.sl.toFixed(dec)}</div>
+          <div className="fsd-mono text-sm text-[#D6503A]">{sl.toFixed(dec)}</div>
+          <div className="fsd-mono text-[9px] text-[#8892A8]">−{slPips} Pips</div>
         </div>
         <div className="bg-[#F5F6FA] rounded-lg py-2 border border-[#ECEFF6]">
           <div className="text-[9px] text-[#6B7590] uppercase">Ziel</div>
-          <div className="fsd-mono text-sm text-[#2F9E6E]">{result.tp.toFixed(dec)}</div>
+          <div className="fsd-mono text-sm text-[#2F9E6E]">{tp.toFixed(dec)}</div>
+          <div className="fsd-mono text-[9px] text-[#8892A8]">+{tpPips} Pips</div>
         </div>
       </div>
 
@@ -235,7 +254,7 @@ function TopPickCard({ result, rank }) {
         <ScoreBar label="Momentum" value={result.momentumScore} tone="momentum" />
         <ScoreBar label="Volatilität" value={result.volScore} tone="vol" />
       </div>
-      <div className="text-[10px] text-[#7B8399] fsd-mono">CRV ≈ 1:1.67 · Stand {result.lastDate}</div>
+      <div className="text-[10px] text-[#7B8399] fsd-mono">CRV 1:{crv} · grob {minDays}–{maxDays} Handelstage · Stand {result.lastDate}</div>
     </div>
   );
 }
@@ -251,6 +270,15 @@ export default function FXSignalDesk() {
   const [error, setError] = useState("");
   const [lastRun, setLastRun] = useState(null);
   const [history, setHistory] = useState(() => storageGet("fsd:history") ?? []);
+  const [tradeStyle, setTradeStyle] = useState(() => {
+    const s = storageGet("fsd:tradeStyle");
+    return TRADE_STYLES[s] ? s : "swing";
+  });
+
+  const changeTradeStyle = (key) => {
+    setTradeStyle(key);
+    storageSet("fsd:tradeStyle", key);
+  };
 
   useEffect(() => { pruneOldCaches(); }, []);
 
@@ -368,6 +396,27 @@ export default function FXSignalDesk() {
               Kostenlosen Key holen <ChevronRight size={12} />
             </a>
 
+            <label className="text-xs text-[#6B7590] block mb-2">Trade-Horizont (Abstand von Stop &amp; Ziel, in ATR)</label>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-4">
+              {Object.entries(TRADE_STYLES).map(([key, s]) => {
+                const active = tradeStyle === key;
+                return (
+                  <button
+                    key={key}
+                    onClick={() => changeTradeStyle(key)}
+                    className="text-left px-3 py-2 rounded-lg border transition-colors"
+                    style={active
+                      ? { background: "#EAF0FF", borderColor: "#5B8CFF" }
+                      : { background: "transparent", borderColor: "#E1E5F0" }}
+                  >
+                    <div className="text-xs font-semibold" style={{ color: active ? "#2B4FDB" : "#4A5570" }}>{s.label}</div>
+                    <div className="text-[10px] text-[#7B8399] mt-0.5">Stop {s.sl.toLocaleString("de-DE")}× · Ziel {s.tp.toLocaleString("de-DE")}× ATR</div>
+                    <div className="text-[10px] text-[#7B8399]">{s.desc}</div>
+                  </button>
+                );
+              })}
+            </div>
+
             <label className="text-xs text-[#6B7590] block mb-2">Watchlist (max. Anfragen = Instrumente; Free-Tier: 5/Min, 25/Tag)</label>
             <div className="flex flex-wrap gap-2">
               {UNIVERSE.map((u) => {
@@ -427,7 +476,7 @@ export default function FXSignalDesk() {
           <div className="mt-6">
             <h2 className="fsd-display text-sm font-semibold text-[#6B7590] uppercase tracking-wide mb-3">Top {top3.length} Trade-Vorschläge</h2>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {top3.map((r, i) => <TopPickCard key={r.pair} result={r} rank={i + 1} />)}
+              {top3.map((r, i) => <TopPickCard key={r.pair} result={r} rank={i + 1} style={tradeStyle} />)}
             </div>
           </div>
         )}

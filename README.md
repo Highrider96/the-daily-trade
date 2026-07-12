@@ -3,7 +3,10 @@
 Regelbasierte Tages-Analyse für Forex-Paare. Lädt Tageskerzen von Alpha Vantage,
 berechnet technische Indikatoren (SMA 20/50, RSI 14, MACD, ATR 14) und rankt die
 Watchlist nach einem Composite-Score aus Trend, Momentum und Volatilität.
-Die Top 3 werden als Trade-Setups mit Entry, Stop (1,5 × ATR) und Ziel (2,5 × ATR) angezeigt.
+Die Top 3 werden als Trade-Setups mit Entry, Stop und Ziel angezeigt. Deren Abstand
+richtet sich nach dem gewählten **Trade-Horizont** (Einstellungen): Kurzfristig
+(0,8×/1,2× ATR), Swing (1,5×/2,5×) oder Position (2,5×/4,5×) — inkl. Pip-Distanz
+und grober Haltedauer-Schätzung auf den Karten.
 
 **Kein Anlagetool** — Bildungs-/Analysewerkzeug auf Basis kostenloser, verzögerter Daten.
 
