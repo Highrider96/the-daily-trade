@@ -1,0 +1,40 @@
+# FX Signal Desk
+
+Regelbasierte Tages-Analyse für Forex-Paare. Lädt Tageskerzen von Alpha Vantage,
+berechnet technische Indikatoren (SMA 20/50, RSI 14, MACD, ATR 14) und rankt die
+Watchlist nach einem Composite-Score aus Trend, Momentum und Volatilität.
+Die Top 3 werden als Trade-Setups mit Entry, Stop (1,5 × ATR) und Ziel (2,5 × ATR) angezeigt.
+
+**Kein Anlagetool** — Bildungs-/Analysewerkzeug auf Basis kostenloser, verzögerter Daten.
+
+## Stack
+
+- React 19 + Vite 8
+- Tailwind CSS 4 (`@tailwindcss/vite`)
+- lucide-react (Icons)
+- Persistenz (API-Key, Watchlist, Tages-Cache) über `localStorage`
+
+## Starten
+
+```sh
+npm install
+npm run dev
+```
+
+Dann http://localhost:5173 öffnen, in den Einstellungen einen kostenlosen
+[Alpha-Vantage-API-Key](https://www.alphavantage.co/support/#api-key) eintragen
+und den Markt-Scan starten.
+
+## Hinweise
+
+- **Rate-Limit (Free-Tier):** 5 Anfragen/Minute, 25/Tag. Die App wartet deshalb
+  13 s zwischen den Abrufen und cacht Kursdaten pro Tag in `localStorage`.
+- Der API-Key wird nur lokal im Browser gespeichert und direkt an
+  `alphavantage.co` gesendet (kein Proxy).
+
+## Build
+
+```sh
+npm run build   # Produktions-Build nach dist/
+npm run preview # Build lokal testen
+```

@@ -1,0 +1,10 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap');
+@import "tailwindcss";
+
+.fsd-root { font-family: 'Inter', sans-serif; }
+.fsd-display { font-family: 'Space Grotesk', sans-serif; }
+.fsd-mono { font-family: 'JetBrains Mono', monospace; }
+.fsd-scrollbar::-webkit-scrollbar { height: 6px; width: 6px; }
+.fsd-scrollbar::-webkit-scrollbar-thumb { background: #D3D8E4; border-radius: 4px; }
+@keyframes fsd-sweep { 0% { transform: translateX(-100%); } 100% { transform: translateX(400%); } }
+.fsd-sweep { animation: fsd-sweep 1.6s linear infinite; }
