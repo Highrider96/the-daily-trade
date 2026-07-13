@@ -36,6 +36,11 @@ und den Markt-Scan starten.
   (Schätzung — Abrufe von anderen Geräten zählt er nicht mit).
 - Der API-Key wird nur lokal im Browser gespeichert und direkt an
   `alphavantage.co` gesendet (kein Proxy).
+- **Live-Kurse (optional):** Mit einem kostenlosen
+  [Twelve-Data-Key](https://twelvedata.com/register) (800 Anfragen/Tag, 8/Min)
+  verankert der Button „Live-Kurse holen" Entry/Stop/Ziel am aktuellen Kurs
+  statt am Tagesschluss. Scores und Richtung stammen weiterhin aus der
+  Tages-Analyse.
 
 ## Build
 

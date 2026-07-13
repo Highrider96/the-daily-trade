@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { Settings2, RefreshCw, TrendingUp, TrendingDown, AlertTriangle, Info, X, ChevronRight, Radio, History } from "lucide-react";
+import { Settings2, RefreshCw, TrendingUp, TrendingDown, AlertTriangle, Info, X, ChevronRight, Radio, History, Zap } from "lucide-react";
 import { Sparkline, ScoreHistoryChart } from "./Charts.jsx";
 
 // ---------- Instrument universe ----------
@@ -47,7 +47,7 @@ function pruneOldCaches() {
     const stale = [];
     for (let i = 0; i < localStorage.length; i++) {
       const k = localStorage.key(i);
-      if (k && (k.startsWith("fsd:cache:") || k.startsWith("fsd:quota:")) && !k.endsWith(today)) stale.push(k);
+      if (k && (k.startsWith("fsd:cache:") || k.startsWith("fsd:quota:") || k.startsWith("fsd:tdquota:")) && !k.endsWith(today)) stale.push(k);
     }
     stale.forEach((k) => localStorage.removeItem(k));
   } catch { /* ignore */ }
@@ -170,6 +170,50 @@ const todayKey = () => new Date().toISOString().slice(0, 10);
 const DAILY_LIMIT = 25;
 const quotaKey = () => `fsd:quota:${todayKey()}`;
 
+// Twelve-Data-Free-Tier: 800 Credits/Tag, 8/Minute (1 Credit pro Symbol).
+const TD_DAILY_LIMIT = 800;
+const tdQuotaKey = () => `fsd:tdquota:${todayKey()}`;
+
+// ---------- Twelve Data: aktuelle Kurse ----------
+async function fetchLiveRates(pairs, tdKey) {
+  const url = `https://api.twelvedata.com/price?symbol=${encodeURIComponent(pairs.join(","))}&apikey=${tdKey}&dp=5`;
+  let res;
+  try {
+    res = await fetch(url);
+  } catch {
+    throw new Error("Verbindung zu Twelve Data fehlgeschlagen — bitte Internetverbindung prüfen.");
+  }
+  if (!res.ok) throw new Error(`Twelve-Data-HTTP-Fehler (${res.status}).`);
+  const data = await res.json();
+  if (data.status === "error") throw new Error("Twelve Data: " + (data.message || "unbekannter Fehler"));
+  const at = new Date();
+  const out = {};
+  if (pairs.length === 1) {
+    if (data.price) out[pairs[0]] = { price: parseFloat(data.price), at };
+  } else {
+    for (const p of pairs) {
+      if (data[p] && data[p].price) out[p] = { price: parseFloat(data[p].price), at };
+    }
+  }
+  if (Object.keys(out).length === 0) throw new Error("Twelve Data lieferte keine Kurse (Key korrekt?).");
+  return out;
+}
+
+// Manche Keys/Tarife mögen keine Batch-Abfragen — dann einzeln nachladen.
+async function fetchLiveRatesRobust(pairs, tdKey) {
+  try {
+    return await fetchLiveRates(pairs, tdKey);
+  } catch (e) {
+    if (pairs.length === 1) throw e;
+    const out = {};
+    for (const p of pairs) {
+      try { Object.assign(out, await fetchLiveRates([p], tdKey)); } catch { /* Paar überspringen */ }
+    }
+    if (Object.keys(out).length === 0) throw e;
+    return out;
+  }
+}
+
 // ---------- Small UI pieces ----------
 function ScoreBar({ label, value, tone }) {
   const toneMap = { trend: "#5B8CFF", momentum: "#E0A458", vol: "#2F9E6E" };
@@ -204,13 +248,14 @@ function ConvictionDial({ score, direction }) {
   );
 }
 
-function TopPickCard({ result, rank, style }) {
+function TopPickCard({ result, rank, style, live }) {
   const isLong = result.direction === "LONG";
   const color = isLong ? "#2F9E6E" : "#D6503A";
   const dec = decimalsFor(result.pair);
   const { sl: slMult, tp: tpMult } = TRADE_STYLES[style];
-  const sl = isLong ? result.entry - slMult * result.atr : result.entry + slMult * result.atr;
-  const tp = isLong ? result.entry + tpMult * result.atr : result.entry - tpMult * result.atr;
+  const anchor = live ? live.price : result.entry;
+  const sl = isLong ? anchor - slMult * result.atr : anchor + slMult * result.atr;
+  const tp = isLong ? anchor + tpMult * result.atr : anchor - tpMult * result.atr;
   const pipSize = result.pair.includes("JPY") ? 0.01 : 0.0001;
   const slPips = Math.round((slMult * result.atr) / pipSize);
   const tpPips = Math.round((tpMult * result.atr) / pipSize);
@@ -243,7 +288,10 @@ function TopPickCard({ result, rank, style }) {
       <div className="grid grid-cols-3 gap-2 text-center">
         <div className="bg-[#F5F6FA] rounded-lg py-2 border border-[#ECEFF6]">
           <div className="text-[9px] text-[#6B7590] uppercase">Entry</div>
-          <div className="fsd-mono text-sm text-[#1D2433]">{result.entry.toFixed(dec)}</div>
+          <div className="fsd-mono text-sm text-[#1D2433]">{anchor.toFixed(dec)}</div>
+          <div className="fsd-mono text-[9px]" style={{ color: live ? "#2B8A5E" : "#8892A8" }}>
+            {live ? `live ${live.at.toLocaleTimeString("de-DE")}` : "Tagesschluss"}
+          </div>
         </div>
         <div className="bg-[#F5F6FA] rounded-lg py-2 border border-[#ECEFF6]">
           <div className="text-[9px] text-[#6B7590] uppercase">Stop</div>
@@ -296,6 +344,34 @@ export default function FXSignalDesk() {
     setQuotaUsed(next);
   };
 
+  const [tdKey, setTdKey] = useState(() => storageGet("fsd:tdKey") ?? "");
+  const [liveRates, setLiveRates] = useState({});
+  const [liveUpdating, setLiveUpdating] = useState(false);
+  const [tdQuotaUsed, setTdQuotaUsed] = useState(() => storageGet(tdQuotaKey()) ?? 0);
+
+  const refreshLive = async () => {
+    if (!tdKey) {
+      setError("Für Live-Kurse bitte zuerst einen Twelve-Data-API-Key in den Einstellungen eintragen.");
+      setShowSettings(true);
+      return;
+    }
+    if (results.length === 0 || liveUpdating) return;
+    setError("");
+    setLiveUpdating(true);
+    try {
+      // Free-Tier erlaubt 8 Credits/Minute — daher max. 8 Paare pro Update
+      const pairs = results.map((r) => r.pair).slice(0, 8);
+      const next = (storageGet(tdQuotaKey()) ?? 0) + pairs.length;
+      storageSet(tdQuotaKey(), next);
+      setTdQuotaUsed(next);
+      const rates = await fetchLiveRatesRobust(pairs, tdKey);
+      setLiveRates((prev) => ({ ...prev, ...rates }));
+    } catch (e) {
+      setError(e.message);
+    }
+    setLiveUpdating(false);
+  };
+
   useEffect(() => { pruneOldCaches(); }, []);
 
   const saveSettings = useCallback((key, list) => {
@@ -315,6 +391,7 @@ export default function FXSignalDesk() {
     setError("");
     setAnalyzing(true);
     setResults([]);
+    setLiveRates({});
     const collected = [];
     const instruments = UNIVERSE.filter((u) => selected.includes(u.pair));
 
@@ -411,6 +488,18 @@ export default function FXSignalDesk() {
             />
             <a href="https://www.alphavantage.co/support/#api-key" target="_blank" rel="noopener noreferrer" className="text-[11px] text-[#5B8CFF] hover:underline flex items-center gap-0.5 mb-4">
               Kostenlosen Key holen <ChevronRight size={12} />
+            </a>
+
+            <label className="text-xs text-[#6B7590] block mb-1.5">Twelve Data API-Key (optional — für Live-Kurse)</label>
+            <input
+              type="password"
+              value={tdKey}
+              onChange={(e) => { setTdKey(e.target.value); storageSet("fsd:tdKey", e.target.value); }}
+              placeholder="Optionaler zweiter Key für Live-Entries"
+              className="w-full bg-[#F5F6FA] border border-[#E1E5F0] rounded-lg px-3 py-2 text-sm fsd-mono outline-none focus:border-[#5B8CFF] mb-1"
+            />
+            <a href="https://twelvedata.com/register" target="_blank" rel="noopener noreferrer" className="text-[11px] text-[#5B8CFF] hover:underline flex items-center gap-0.5 mb-4">
+              Kostenlosen Key holen (800 Anfragen/Tag) <ChevronRight size={12} />
             </a>
 
             <label className="text-xs text-[#6B7590] block mb-2">Trade-Horizont (Abstand von Stop &amp; Ziel, in ATR)</label>
@@ -516,9 +605,24 @@ export default function FXSignalDesk() {
         {/* Top picks */}
         {top3.length > 0 && (
           <div className="mt-6">
-            <h2 className="fsd-display text-sm font-semibold text-[#6B7590] uppercase tracking-wide mb-3">Top {top3.length} Trade-Vorschläge</h2>
+            <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
+              <h2 className="fsd-display text-sm font-semibold text-[#6B7590] uppercase tracking-wide">Top {top3.length} Trade-Vorschläge</h2>
+              <div className="flex items-center gap-2">
+                {tdQuotaUsed > 0 && (
+                  <span className="fsd-mono text-[10px] text-[#8892A8]">{tdQuotaUsed}/{TD_DAILY_LIMIT} heute</span>
+                )}
+                <button
+                  onClick={refreshLive}
+                  disabled={liveUpdating}
+                  className="flex items-center gap-1.5 text-[11px] font-medium px-3 py-1.5 rounded-lg border border-[#E1E5F0] hover:bg-[#F0F2F8] text-[#4A5570] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  <Zap size={12} color="#E0A458" />
+                  {liveUpdating ? "Hole Live-Kurse..." : "Live-Kurse holen"}
+                </button>
+              </div>
+            </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {top3.map((r, i) => <TopPickCard key={r.pair} result={r} rank={i + 1} style={tradeStyle} />)}
+              {top3.map((r, i) => <TopPickCard key={r.pair} result={r} rank={i + 1} style={tradeStyle} live={liveRates[r.pair]} />)}
             </div>
           </div>
         )}
