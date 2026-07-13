@@ -4,9 +4,9 @@ Regelbasierte Tages-Analyse für Forex-Paare. Lädt Tageskerzen von Alpha Vantag
 berechnet technische Indikatoren (SMA 20/50, RSI 14, MACD, ATR 14) und rankt die
 Watchlist nach einem Composite-Score aus Trend, Momentum und Volatilität.
 Die Top 3 werden als Trade-Setups mit Entry, Stop und Ziel angezeigt. Deren Abstand
-richtet sich nach dem gewählten **Trade-Horizont** (Einstellungen): Kurzfristig
-(0,8×/1,2× ATR), Swing (1,5×/2,5×) oder Position (2,5×/4,5×) — inkl. Pip-Distanz
-und grober Haltedauer-Schätzung auf den Karten.
+richtet sich nach dem gewählten **Trade-Horizont** (Einstellungen): Scalping
+(0,25×/0,35× ATR), Kurzfristig (0,8×/1,2×), Swing (1,5×/2,5×) oder Position
+(2,5×/4,5×) — inkl. Pip-Distanz und grober Haltedauer-Schätzung auf den Karten.
 
 **Kein Anlagetool** — Bildungs-/Analysewerkzeug auf Basis kostenloser, verzögerter Daten.
 
@@ -31,7 +31,9 @@ und den Markt-Scan starten.
 ## Hinweise
 
 - **Rate-Limit (Free-Tier):** 5 Anfragen/Minute, 25/Tag. Die App wartet deshalb
-  13 s zwischen den Abrufen und cacht Kursdaten pro Tag in `localStorage`.
+  13 s zwischen den Abrufen, cacht Kursdaten pro Tag in `localStorage` und zeigt
+  einen lokalen Zähler der heute verbrauchten/verbleibenden Anfragen an
+  (Schätzung — Abrufe von anderen Geräten zählt er nicht mit).
 - Der API-Key wird nur lokal im Browser gespeichert und direkt an
   `alphavantage.co` gesendet (kein Proxy).
 
