@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Settings2, RefreshCw, TrendingUp, TrendingDown, AlertTriangle, Info, X, ChevronRight, Radio, History, Zap } from "lucide-react";
 import { Sparkline, ScoreHistoryChart } from "./Charts.jsx";
+import InfoPage from "./InfoPage.jsx";
 
 // ---------- Instrument universe ----------
 const UNIVERSE = [
@@ -320,6 +321,7 @@ export default function TheDailyTrade() {
   const [apiKey, setApiKey] = useState(() => storageGet("fsd:apiKey") ?? "");
   const [selected, setSelected] = useState(() => storageGet("fsd:watchlist") ?? DEFAULT_SELECTED);
   const [showSettings, setShowSettings] = useState(true);
+  const [view, setView] = useState("scan");
   const [analyzing, setAnalyzing] = useState(false);
   const [progressMsg, setProgressMsg] = useState("");
   const [results, setResults] = useState([]);
@@ -453,15 +455,36 @@ export default function TheDailyTrade() {
             </div>
           </div>
           <button
-            onClick={() => setShowSettings((s) => !s)}
+            onClick={() => {
+              if (view !== "scan") { setView("scan"); setShowSettings(true); }
+              else setShowSettings((s) => !s);
+            }}
             className="p-2 rounded-lg border border-[#E1E5F0] hover:bg-[#F0F2F8] transition-colors"
           >
             <Settings2 size={16} color="#6B7590" />
           </button>
         </div>
+        {/* Reiter-Navigation */}
+        <div className="max-w-5xl mx-auto px-4 flex gap-1">
+          {[["scan", "Scan"], ["info", "Funktionsweise"]].map(([key, label]) => (
+            <button
+              key={key}
+              onClick={() => setView(key)}
+              className="px-4 py-2 text-xs font-semibold -mb-px border-b-2 transition-colors"
+              style={view === key
+                ? { borderColor: "#E0A458", color: "#1D2433" }
+                : { borderColor: "transparent", color: "#7B8399" }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="max-w-5xl mx-auto px-4">
+        {view === "info" && <InfoPage styles={TRADE_STYLES} />}
+
+        {view === "scan" && <>
         {/* Disclaimer */}
         <div className="mt-4 flex items-start gap-2 bg-[#FFF6E9] border border-[#F0DBAE] rounded-lg px-3 py-2.5">
           <AlertTriangle size={14} color="#C9862E" className="mt-0.5 shrink-0" />
@@ -670,6 +693,7 @@ export default function TheDailyTrade() {
             <p className="text-sm text-[#7B8399]">Trage deinen API-Key ein und starte den ersten Scan,<br />um deine Top-Trade-Vorschläge zu sehen.</p>
           </div>
         )}
+        </>}
       </div>
     </div>
   );
