@@ -20,6 +20,7 @@ const DEFAULT_SELECTED = ["EUR/USD", "GBP/USD", "USD/JPY", "AUD/USD", "USD/CAD"]
 // Trade-Horizont: bestimmt, wie viele ATR (mittlere Tagesschwankung)
 // Stop und Ziel vom Einstieg entfernt liegen.
 const TRADE_STYLES = {
+  scalp: { label: "Scalping", sl: 0.25, tp: 0.35, desc: "sehr eng · Intraday bis 1–2 Tage" },
   kurz: { label: "Kurzfristig", sl: 0.8, tp: 1.2, desc: "enge Level · grob 1–4 Handelstage" },
   swing: { label: "Swing", sl: 1.5, tp: 2.5, desc: "Standard · grob 3–8 Handelstage" },
   position: { label: "Position", sl: 2.5, tp: 4.5, desc: "weite Level · grob 1–3 Wochen" },
@@ -37,14 +38,16 @@ function storageGet(key) {
 function storageSet(key, value) {
   try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* quota/private mode */ }
 }
+function storageHas(key) {
+  try { return localStorage.getItem(key) != null; } catch { return false; }
+}
 function pruneOldCaches() {
-  const prefix = "fsd:cache:";
   const today = todayKey();
   try {
     const stale = [];
     for (let i = 0; i < localStorage.length; i++) {
       const k = localStorage.key(i);
-      if (k && k.startsWith(prefix) && !k.endsWith(today)) stale.push(k);
+      if (k && (k.startsWith("fsd:cache:") || k.startsWith("fsd:quota:")) && !k.endsWith(today)) stale.push(k);
     }
     stale.forEach((k) => localStorage.removeItem(k));
   } catch { /* ignore */ }
@@ -161,6 +164,11 @@ async function fetchFXDaily(from, to, apiKey) {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const todayKey = () => new Date().toISOString().slice(0, 10);
+
+// Alpha-Vantage-Free-Tier: 25 Anfragen pro Tag. Der Zähler ist eine lokale
+// Schätzung — Anfragen von anderen Geräten/Tools zählt er nicht mit.
+const DAILY_LIMIT = 25;
+const quotaKey = () => `fsd:quota:${todayKey()}`;
 
 // ---------- Small UI pieces ----------
 function ScoreBar({ label, value, tone }) {
@@ -280,6 +288,14 @@ export default function FXSignalDesk() {
     storageSet("fsd:tradeStyle", key);
   };
 
+  const [quotaUsed, setQuotaUsed] = useState(() => storageGet(quotaKey()) ?? 0);
+
+  const bumpQuota = () => {
+    const next = (storageGet(quotaKey()) ?? 0) + 1;
+    storageSet(quotaKey(), next);
+    setQuotaUsed(next);
+  };
+
   useEffect(() => { pruneOldCaches(); }, []);
 
   const saveSettings = useCallback((key, list) => {
@@ -310,6 +326,7 @@ export default function FXSignalDesk() {
         let candles = storageGet(cacheKey);
 
         if (!candles) {
+          bumpQuota();
           candles = await fetchFXDaily(inst.from, inst.to, apiKey);
           storageSet(cacheKey, candles);
           if (i < instruments.length - 1) {
@@ -397,7 +414,7 @@ export default function FXSignalDesk() {
             </a>
 
             <label className="text-xs text-[#6B7590] block mb-2">Trade-Horizont (Abstand von Stop &amp; Ziel, in ATR)</label>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 mb-3">
               {Object.entries(TRADE_STYLES).map(([key, s]) => {
                 const active = tradeStyle === key;
                 return (
@@ -416,6 +433,15 @@ export default function FXSignalDesk() {
                 );
               })}
             </div>
+
+            {tradeStyle === "scalp" && (
+              <div className="flex items-start gap-2 bg-[#FFF6E9] border border-[#F0DBAE] rounded-lg px-3 py-2 mb-4">
+                <AlertTriangle size={13} color="#C9862E" className="mt-0.5 shrink-0" />
+                <p className="text-[10px] text-[#8A6420] leading-relaxed">
+                  Scalping-Hinweis: Die Analyse basiert auf <strong>Tageskerzen</strong> — echtes Sekunden-/Minuten-Scalping bräuchte Intraday-Daten. Die Level sind hier sehr eng, dadurch fallen Spread &amp; Slippage deutlich stärker ins Gewicht.
+                </p>
+              </div>
+            )}
 
             <label className="text-xs text-[#6B7590] block mb-2">Watchlist (max. Anfragen = Instrumente; Free-Tier: 5/Min, 25/Tag)</label>
             <div className="flex flex-wrap gap-2">
@@ -439,9 +465,23 @@ export default function FXSignalDesk() {
         )}
 
         {/* Run bar */}
+        {(() => {
+          const remaining = Math.max(0, DAILY_LIMIT - quotaUsed);
+          const nextScanNeeds = selected.filter((p) => !storageHas(`fsd:cache:${p}:${todayKey()}`)).length;
+          const low = remaining < nextScanNeeds;
+          return (
         <div className="mt-4 flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
           <div className="text-xs text-[#7B8399]">
-            {lastRun ? `Letzter Scan: ${lastRun.toLocaleString("de-DE")}` : "Noch kein Scan durchgeführt."}
+            <div>{lastRun ? `Letzter Scan: ${lastRun.toLocaleString("de-DE")}` : "Noch kein Scan durchgeführt."}</div>
+            <div className="mt-0.5">
+              API-Anfragen heute: <span className="fsd-mono" style={{ color: low ? "#C9862E" : "#4A5570" }}>{quotaUsed}/{DAILY_LIMIT}</span>
+              {" · "}noch <span className="fsd-mono" style={{ color: low ? "#C9862E" : "#4A5570" }}>{remaining}</span> übrig (geschätzt)
+              {nextScanNeeds > 0 && <> · nächster Scan braucht bis zu <span className="fsd-mono">{nextScanNeeds}</span></>}
+              {nextScanNeeds === 0 && selected.length > 0 && <> · nächster Scan läuft komplett aus dem Tages-Cache</>}
+            </div>
+            {low && (
+              <div className="mt-0.5 text-[#C9862E]">Achtung: Das Tageslimit reicht evtl. nicht für alle gewählten Instrumente.</div>
+            )}
           </div>
           <button
             onClick={runAnalysis}
@@ -452,6 +492,8 @@ export default function FXSignalDesk() {
             {analyzing ? "Analysiere..." : "Markt-Scan starten"}
           </button>
         </div>
+          );
+        })()}
 
         {/* Progress */}
         {analyzing && (
