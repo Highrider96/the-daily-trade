@@ -316,7 +316,7 @@ function TopPickCard({ result, rank, style, live }) {
 }
 
 // ---------- Main App ----------
-export default function FXSignalDesk() {
+export default function TheDailyTrade() {
   const [apiKey, setApiKey] = useState(() => storageGet("fsd:apiKey") ?? "");
   const [selected, setSelected] = useState(() => storageGet("fsd:watchlist") ?? DEFAULT_SELECTED);
   const [showSettings, setShowSettings] = useState(true);
@@ -448,7 +448,7 @@ export default function FXSignalDesk() {
           <div className="flex items-center gap-2">
             <Radio size={20} color="#E0A458" />
             <div>
-              <div className="fsd-display text-lg font-semibold leading-none">FX Signal Desk</div>
+              <div className="fsd-display text-lg font-semibold leading-none">The Daily Trade</div>
               <div className="text-[11px] text-[#7B8399] mt-0.5">Regelbasierte Tages-Analyse · Forex</div>
             </div>
           </div>

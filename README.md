@@ -1,4 +1,6 @@
-# FX Signal Desk
+# The Daily Trade
+
+*(ehemals „FX Signal Desk")*
 
 Regelbasierte Tages-Analyse für Forex-Paare. Lädt Tageskerzen von Alpha Vantage,
 berechnet technische Indikatoren (SMA 20/50, RSI 14, MACD, ATR 14) und rankt die
