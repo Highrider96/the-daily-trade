@@ -4,16 +4,16 @@ import { useState } from "react";
 // Die beiden JPY-Kreuze teilen sich Hue mit dem jeweiligen Major und
 // werden zur Unterscheidung gestrichelt gezeichnet (Komposit-Kodierung).
 export const PAIR_STYLE = {
-  "EUR/USD": { color: "#2a78d6" },
-  "GBP/USD": { color: "#1baf7a" },
-  "USD/JPY": { color: "#eda100" },
+  "EUR/USD": { color: "#3987e5" },
+  "GBP/USD": { color: "#199e70" },
+  "USD/JPY": { color: "#c98500" },
   "USD/CHF": { color: "#008300" },
-  "AUD/USD": { color: "#4a3aa7" },
-  "USD/CAD": { color: "#e34948" },
-  "NZD/USD": { color: "#e87ba4" },
-  "EUR/GBP": { color: "#eb6834" },
-  "EUR/JPY": { color: "#2a78d6", dash: true },
-  "GBP/JPY": { color: "#1baf7a", dash: true },
+  "AUD/USD": { color: "#9085e9" },
+  "USD/CAD": { color: "#e66767" },
+  "NZD/USD": { color: "#d55181" },
+  "EUR/GBP": { color: "#d95926" },
+  "EUR/JPY": { color: "#3987e5", dash: true },
+  "GBP/JPY": { color: "#199e70", dash: true },
 };
 
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
@@ -57,12 +57,12 @@ export function Sparkline({ data, dec = 5, height = 44, showArea = true }) {
     >
       <svg viewBox={`0 0 ${W} ${H}`} width="100%" height="100%" preserveAspectRatio="none" className="block">
         {showArea && (
-          <polygon points={`0,${H} ${pts} ${W},${H}`} fill="rgba(42,120,214,0.08)" />
+          <polygon points={`0,${H} ${pts} ${W},${H}`} fill="rgba(57,135,229,0.15)" />
         )}
         <polyline
           points={pts}
           fill="none"
-          stroke="#2a78d6"
+          stroke="#3987e5"
           strokeWidth="2"
           strokeLinejoin="round"
           strokeLinecap="round"
@@ -72,11 +72,11 @@ export function Sparkline({ data, dec = 5, height = 44, showArea = true }) {
       {hover && (
         <>
           <div
-            className="absolute w-2 h-2 rounded-full border-2 border-white pointer-events-none"
-            style={{ background: "#2a78d6", left: `${hover.xPct}%`, top: `${hover.yPct}%`, transform: "translate(-50%,-50%)", boxShadow: "0 0 0 1px rgba(42,120,214,0.4)" }}
+            className="absolute w-2 h-2 rounded-full border-2 border-[#0E1116] pointer-events-none"
+            style={{ background: "#3987e5", left: `${hover.xPct}%`, top: `${hover.yPct}%`, transform: "translate(-50%,-50%)", boxShadow: "0 0 0 1px rgba(57,135,229,0.45)" }}
           />
           <div
-            className="absolute bottom-full mb-1 pointer-events-none bg-[#1D2433] text-white rounded px-2 py-1 whitespace-nowrap z-20"
+            className="absolute bottom-full mb-1 pointer-events-none bg-[#232B36] text-white rounded px-2 py-1 whitespace-nowrap z-20"
             style={{ left: `${hover.xPct}%`, transform: tipAlign }}
           >
             <span className="fsd-mono text-[10px]">{fmtDate(data[hover.i].date)} · {data[hover.i].close.toFixed(dec)}</span>
@@ -154,7 +154,7 @@ export function ScoreHistoryChart({ history, pairs }) {
             <svg width="16" height="6" className="shrink-0">
               <line x1="0" y1="3" x2="16" y2="3" stroke={s.color} strokeWidth="2.5" strokeDasharray={s.dash ? "4 3" : "none"} strokeLinecap="round" />
             </svg>
-            <span className="fsd-mono text-[10px] text-[#4A5570]">{s.pair}</span>
+            <span className="fsd-mono text-[10px] text-[#B7C0CE]">{s.pair}</span>
           </div>
         ))}
       </div>
@@ -164,19 +164,19 @@ export function ScoreHistoryChart({ history, pairs }) {
           {/* Gitter + Y-Achse */}
           {[0, 25, 50, 75, 100].map((v) => (
             <g key={v}>
-              <line x1={padL} y1={y(v)} x2={W - padR} y2={y(v)} stroke="#ECEFF6" strokeWidth="1" />
-              <text x={padL - 6} y={y(v) + 3} textAnchor="end" fontSize="9" fill="#8892A8" fontFamily="'JetBrains Mono', monospace">{v}</text>
+              <line x1={padL} y1={y(v)} x2={W - padR} y2={y(v)} stroke="#232B36" strokeWidth="1" />
+              <text x={padL - 6} y={y(v) + 3} textAnchor="end" fontSize="9" fill="#6F7A8C" fontFamily="'JetBrains Mono', monospace">{v}</text>
             </g>
           ))}
           {/* X-Achsen-Daten */}
           {xTicks.map((i) => (
-            <text key={i} x={x(i)} y={H - 6} textAnchor="middle" fontSize="9" fill="#8892A8" fontFamily="'JetBrains Mono', monospace">
+            <text key={i} x={x(i)} y={H - 6} textAnchor="middle" fontSize="9" fill="#6F7A8C" fontFamily="'JetBrains Mono', monospace">
               {fmtDate(history[i].date)}
             </text>
           ))}
           {/* Crosshair */}
           {hi != null && (
-            <line x1={x(hi)} y1={padT} x2={x(hi)} y2={padT + plotH} stroke="#C6CCDC" strokeWidth="1" strokeDasharray="3 3" />
+            <line x1={x(hi)} y1={padT} x2={x(hi)} y2={padT + plotH} stroke="#3A4553" strokeWidth="1" strokeDasharray="3 3" />
           )}
           {/* Serien */}
           {seriesSegments.map((s) =>
@@ -200,7 +200,7 @@ export function ScoreHistoryChart({ history, pairs }) {
                     cy={y(p.v)}
                     r={hi === p.i ? 4 : seg.length === 1 ? 3.5 : 2}
                     fill={s.color}
-                    stroke="#FFFFFF"
+                    stroke="#161B22"
                     strokeWidth={hi === p.i ? 1.5 : 0}
                   />
                 ))}
@@ -211,7 +211,7 @@ export function ScoreHistoryChart({ history, pairs }) {
           {labels.map((l) => (
             <g key={l.pair}>
               <circle cx={l.lx + 8} cy={l.ly} r="2.5" fill={l.color} />
-              <text x={l.lx + 14} y={l.ly + 3} fontSize="9" fill="#4A5570" fontFamily="'JetBrains Mono', monospace">{l.pair}</text>
+              <text x={l.lx + 14} y={l.ly + 3} fontSize="9" fill="#B7C0CE" fontFamily="'JetBrains Mono', monospace">{l.pair}</text>
             </g>
           ))}
         </svg>
@@ -219,10 +219,10 @@ export function ScoreHistoryChart({ history, pairs }) {
         {/* Tooltip */}
         {hovered && (
           <div
-            className="absolute top-2 pointer-events-none bg-[#1D2433] text-white rounded-lg px-3 py-2 z-20"
+            className="absolute top-2 pointer-events-none bg-[#232B36] text-white rounded-lg px-3 py-2 z-20"
             style={tipLeft ? { left: `calc(${hiXPct}% + 12px)` } : { right: `calc(${100 - hiXPct}% + 12px)` }}
           >
-            <div className="fsd-mono text-[10px] text-[#AEB6CC] mb-1">{fmtDate(hovered.date)}</div>
+            <div className="fsd-mono text-[10px] text-[#8C96A8] mb-1">{fmtDate(hovered.date)}</div>
             {hoverRows.map((r) => (
               <div key={r.pair} className="flex items-center gap-2 leading-5">
                 <span className="w-2 h-2 rounded-full shrink-0" style={{ background: r.color }} />
@@ -236,7 +236,7 @@ export function ScoreHistoryChart({ history, pairs }) {
       </div>
 
       {n === 1 && (
-        <p className="text-[11px] text-[#7B8399] mt-2">
+        <p className="text-[11px] text-[#7E8899] mt-2">
           Bisher ist erst ein Scan-Tag gespeichert — mit jedem weiteren Tag, an dem du scannst, wächst der Verlauf.
         </p>
       )}

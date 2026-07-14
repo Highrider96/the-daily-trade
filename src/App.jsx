@@ -217,33 +217,33 @@ async function fetchLiveRatesRobust(pairs, tdKey) {
 
 // ---------- Small UI pieces ----------
 function ScoreBar({ label, value, tone }) {
-  const toneMap = { trend: "#5B8CFF", momentum: "#E0A458", vol: "#2F9E6E" };
+  const toneMap = { trend: "#5B8CFF", momentum: "#E0A458", vol: "#3DBB85" };
   return (
     <div className="flex items-center gap-2">
-      <span className="fsd-mono text-[10px] text-[#6B7590] w-20 shrink-0 uppercase tracking-wide">{label}</span>
-      <div className="flex-1 h-1.5 bg-[#ECEFF6] rounded-full overflow-hidden">
+      <span className="fsd-mono text-[10px] text-[#8C96A8] w-20 shrink-0 uppercase tracking-wide">{label}</span>
+      <div className="flex-1 h-1.5 bg-[#232B36] rounded-full overflow-hidden">
         <div className="h-full rounded-full" style={{ width: `${value}%`, background: toneMap[tone] }} />
       </div>
-      <span className="fsd-mono text-[10px] text-[#4A5570] w-7 text-right">{Math.round(value)}</span>
+      <span className="fsd-mono text-[10px] text-[#B7C0CE] w-7 text-right">{Math.round(value)}</span>
     </div>
   );
 }
 
 function ConvictionDial({ score, direction }) {
-  const color = direction === "LONG" ? "#2F9E6E" : "#D6503A";
+  const color = direction === "LONG" ? "#3DBB85" : "#E5695A";
   const angle = (score / 100) * 270;
   return (
     <div className="relative w-20 h-20 shrink-0">
       <div
         className="absolute inset-0 rounded-full"
         style={{
-          background: `conic-gradient(${color} ${angle}deg, #ECEFF6 ${angle}deg 270deg, transparent 270deg 360deg)`,
+          background: `conic-gradient(${color} ${angle}deg, #232B36 ${angle}deg 270deg, transparent 270deg 360deg)`,
           transform: "rotate(135deg)",
         }}
       />
-      <div className="absolute inset-[6px] rounded-full bg-[#F5F6FA] flex flex-col items-center justify-center">
+      <div className="absolute inset-[6px] rounded-full bg-[#1C232D] flex flex-col items-center justify-center">
         <span className="fsd-mono text-base font-bold" style={{ color }}>{Math.round(score)}</span>
-        <span className="text-[8px] text-[#6B7590] uppercase tracking-wide">Score</span>
+        <span className="text-[8px] text-[#8C96A8] uppercase tracking-wide">Score</span>
       </div>
     </div>
   );
@@ -251,7 +251,7 @@ function ConvictionDial({ score, direction }) {
 
 function TopPickCard({ result, rank, style, live }) {
   const isLong = result.direction === "LONG";
-  const color = isLong ? "#2F9E6E" : "#D6503A";
+  const color = isLong ? "#3DBB85" : "#E5695A";
   const dec = decimalsFor(result.pair);
   const { sl: slMult, tp: tpMult } = TRADE_STYLES[style];
   const anchor = live ? live.price : result.entry;
@@ -266,13 +266,13 @@ function TopPickCard({ result, rank, style, live }) {
   const minDays = Math.max(1, Math.ceil(tpMult));
   const maxDays = Math.ceil(tpMult * 3);
   return (
-    <div className="bg-[#FFFFFF] border border-[#E1E5F0] rounded-xl p-5 flex flex-col gap-4 relative overflow-hidden">
-      <div className="absolute top-0 left-0 text-[10px] fsd-mono text-[#8892A8] px-3 py-1 border-r border-b border-[#E1E5F0] rounded-br-lg">
+    <div className="bg-[#161B22] border border-[#2A3341] rounded-xl p-5 flex flex-col gap-4 relative overflow-hidden">
+      <div className="absolute top-0 left-0 text-[10px] fsd-mono text-[#6F7A8C] px-3 py-1 border-r border-b border-[#2A3341] rounded-br-lg">
         RANG {rank}
       </div>
       <div className="flex items-start justify-between pt-4">
         <div>
-          <div className="fsd-display text-xl font-semibold text-[#1D2433]">{result.pair}</div>
+          <div className="fsd-display text-xl font-semibold text-[#E8ECF2]">{result.pair}</div>
           <div className="flex items-center gap-1.5 mt-1">
             {isLong ? <TrendingUp size={14} color={color} /> : <TrendingDown size={14} color={color} />}
             <span className="fsd-mono text-xs font-semibold tracking-wide" style={{ color }}>{result.direction}</span>
@@ -282,36 +282,36 @@ function TopPickCard({ result, rank, style, live }) {
       </div>
 
       <div>
-        <div className="text-[9px] text-[#6B7590] uppercase tracking-wide mb-1">Kursverlauf · 100 Tage</div>
+        <div className="text-[9px] text-[#8C96A8] uppercase tracking-wide mb-1">Kursverlauf · 100 Tage</div>
         <Sparkline data={result.spark} dec={dec} height={44} />
       </div>
 
       <div className="grid grid-cols-3 gap-2 text-center">
-        <div className="bg-[#F5F6FA] rounded-lg py-2 border border-[#ECEFF6]">
-          <div className="text-[9px] text-[#6B7590] uppercase">Entry</div>
-          <div className="fsd-mono text-sm text-[#1D2433]">{anchor.toFixed(dec)}</div>
-          <div className="fsd-mono text-[9px]" style={{ color: live ? "#2B8A5E" : "#8892A8" }}>
+        <div className="bg-[#1C232D] rounded-lg py-2 border border-[#232B36]">
+          <div className="text-[9px] text-[#8C96A8] uppercase">Entry</div>
+          <div className="fsd-mono text-sm text-[#E8ECF2]">{anchor.toFixed(dec)}</div>
+          <div className="fsd-mono text-[9px]" style={{ color: live ? "#47C08D" : "#6F7A8C" }}>
             {live ? `live ${live.at.toLocaleTimeString("de-DE")}` : "Tagesschluss"}
           </div>
         </div>
-        <div className="bg-[#F5F6FA] rounded-lg py-2 border border-[#ECEFF6]">
-          <div className="text-[9px] text-[#6B7590] uppercase">Stop</div>
-          <div className="fsd-mono text-sm text-[#D6503A]">{sl.toFixed(dec)}</div>
-          <div className="fsd-mono text-[9px] text-[#8892A8]">−{slPips} Pips</div>
+        <div className="bg-[#1C232D] rounded-lg py-2 border border-[#232B36]">
+          <div className="text-[9px] text-[#8C96A8] uppercase">Stop</div>
+          <div className="fsd-mono text-sm text-[#E5695A]">{sl.toFixed(dec)}</div>
+          <div className="fsd-mono text-[9px] text-[#6F7A8C]">−{slPips} Pips</div>
         </div>
-        <div className="bg-[#F5F6FA] rounded-lg py-2 border border-[#ECEFF6]">
-          <div className="text-[9px] text-[#6B7590] uppercase">Ziel</div>
-          <div className="fsd-mono text-sm text-[#2F9E6E]">{tp.toFixed(dec)}</div>
-          <div className="fsd-mono text-[9px] text-[#8892A8]">+{tpPips} Pips</div>
+        <div className="bg-[#1C232D] rounded-lg py-2 border border-[#232B36]">
+          <div className="text-[9px] text-[#8C96A8] uppercase">Ziel</div>
+          <div className="fsd-mono text-sm text-[#3DBB85]">{tp.toFixed(dec)}</div>
+          <div className="fsd-mono text-[9px] text-[#6F7A8C]">+{tpPips} Pips</div>
         </div>
       </div>
 
-      <div className="flex flex-col gap-2 pt-1 border-t border-[#ECEFF6]">
+      <div className="flex flex-col gap-2 pt-1 border-t border-[#232B36]">
         <ScoreBar label="Trend" value={result.trendScore} tone="trend" />
         <ScoreBar label="Momentum" value={result.momentumScore} tone="momentum" />
         <ScoreBar label="Volatilität" value={result.volScore} tone="vol" />
       </div>
-      <div className="text-[10px] text-[#7B8399] fsd-mono">CRV 1:{crv} · grob {minDays}–{maxDays} Handelstage · Stand {result.lastDate}</div>
+      <div className="text-[10px] text-[#7E8899] fsd-mono">CRV 1:{crv} · grob {minDays}–{maxDays} Handelstage · Stand {result.lastDate}</div>
     </div>
   );
 }
@@ -443,15 +443,15 @@ export default function TheDailyTrade() {
   const historyPairs = UNIVERSE.map((u) => u.pair).filter((p) => history.some((h) => h.scores[p]));
 
   return (
-    <div className="fsd-root min-h-screen bg-[#F7F8FC] text-[#1D2433] pb-16">
+    <div className="fsd-root min-h-screen bg-[#0E1116] text-[#E8ECF2] pb-16">
       {/* Header */}
-      <div className="border-b border-[#ECEFF6] sticky top-0 bg-[#F7F8FC]/95 backdrop-blur z-10">
+      <div className="border-b border-[#232B36] sticky top-0 bg-[#0E1116]/95 backdrop-blur z-10">
         <div className="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Radio size={20} color="#E0A458" />
             <div>
               <div className="fsd-display text-lg font-semibold leading-none">The Daily Trade</div>
-              <div className="text-[11px] text-[#7B8399] mt-0.5">Regelbasierte Tages-Analyse · Forex</div>
+              <div className="text-[11px] text-[#7E8899] mt-0.5">Regelbasierte Tages-Analyse · Forex</div>
             </div>
           </div>
           <button
@@ -459,9 +459,9 @@ export default function TheDailyTrade() {
               if (view !== "scan") { setView("scan"); setShowSettings(true); }
               else setShowSettings((s) => !s);
             }}
-            className="p-2 rounded-lg border border-[#E1E5F0] hover:bg-[#F0F2F8] transition-colors"
+            className="p-2 rounded-lg border border-[#2A3341] hover:bg-[#1C232D] transition-colors"
           >
-            <Settings2 size={16} color="#6B7590" />
+            <Settings2 size={16} color="#8C96A8" />
           </button>
         </div>
         {/* Reiter-Navigation */}
@@ -472,8 +472,8 @@ export default function TheDailyTrade() {
               onClick={() => setView(key)}
               className="px-4 py-2 text-xs font-semibold -mb-px border-b-2 transition-colors"
               style={view === key
-                ? { borderColor: "#E0A458", color: "#1D2433" }
-                : { borderColor: "transparent", color: "#7B8399" }}
+                ? { borderColor: "#E0A458", color: "#E8ECF2" }
+                : { borderColor: "transparent", color: "#7E8899" }}
             >
               {label}
             </button>
@@ -486,46 +486,46 @@ export default function TheDailyTrade() {
 
         {view === "scan" && <>
         {/* Disclaimer */}
-        <div className="mt-4 flex items-start gap-2 bg-[#FFF6E9] border border-[#F0DBAE] rounded-lg px-3 py-2.5">
-          <AlertTriangle size={14} color="#C9862E" className="mt-0.5 shrink-0" />
-          <p className="text-[11px] text-[#8A6420] leading-relaxed">
+        <div className="mt-4 flex items-start gap-2 bg-[#2A2113] border border-[#4D3B17] rounded-lg px-3 py-2.5">
+          <AlertTriangle size={14} color="#E3A94F" className="mt-0.5 shrink-0" />
+          <p className="text-[11px] text-[#D9B36A] leading-relaxed">
             Bildungs-Werkzeug auf Basis technischer Indikatoren (kostenlose, verzögerte Alpha-Vantage-Daten). Keine Anlageberatung und keine Ausführungsgarantie. Trading birgt Verlustrisiko — triff Entscheidungen eigenverantwortlich.
           </p>
         </div>
 
         {/* Settings panel */}
         {showSettings && (
-          <div className="mt-4 bg-[#FFFFFF] border border-[#E1E5F0] rounded-xl p-5">
+          <div className="mt-4 bg-[#161B22] border border-[#2A3341] rounded-xl p-5">
             <div className="flex items-center justify-between mb-3">
               <h3 className="fsd-display text-sm font-semibold">Einstellungen</h3>
-              <button onClick={() => setShowSettings(false)}><X size={16} color="#7B8399" /></button>
+              <button onClick={() => setShowSettings(false)}><X size={16} color="#7E8899" /></button>
             </div>
 
-            <label className="text-xs text-[#6B7590] block mb-1.5">Alpha Vantage API-Key</label>
+            <label className="text-xs text-[#8C96A8] block mb-1.5">Alpha Vantage API-Key</label>
             <input
               type="password"
               value={apiKey}
               onChange={(e) => { setApiKey(e.target.value); saveSettings(e.target.value, selected); }}
               placeholder="Dein kostenloser API-Key"
-              className="w-full bg-[#F5F6FA] border border-[#E1E5F0] rounded-lg px-3 py-2 text-sm fsd-mono outline-none focus:border-[#5B8CFF] mb-1"
+              className="w-full bg-[#1C232D] border border-[#2A3341] rounded-lg px-3 py-2 text-sm fsd-mono outline-none focus:border-[#5B8CFF] mb-1"
             />
             <a href="https://www.alphavantage.co/support/#api-key" target="_blank" rel="noopener noreferrer" className="text-[11px] text-[#5B8CFF] hover:underline flex items-center gap-0.5 mb-4">
               Kostenlosen Key holen <ChevronRight size={12} />
             </a>
 
-            <label className="text-xs text-[#6B7590] block mb-1.5">Twelve Data API-Key (optional — für Live-Kurse)</label>
+            <label className="text-xs text-[#8C96A8] block mb-1.5">Twelve Data API-Key (optional — für Live-Kurse)</label>
             <input
               type="password"
               value={tdKey}
               onChange={(e) => { setTdKey(e.target.value); storageSet("fsd:tdKey", e.target.value); }}
               placeholder="Optionaler zweiter Key für Live-Entries"
-              className="w-full bg-[#F5F6FA] border border-[#E1E5F0] rounded-lg px-3 py-2 text-sm fsd-mono outline-none focus:border-[#5B8CFF] mb-1"
+              className="w-full bg-[#1C232D] border border-[#2A3341] rounded-lg px-3 py-2 text-sm fsd-mono outline-none focus:border-[#5B8CFF] mb-1"
             />
             <a href="https://twelvedata.com/register" target="_blank" rel="noopener noreferrer" className="text-[11px] text-[#5B8CFF] hover:underline flex items-center gap-0.5 mb-4">
               Kostenlosen Key holen (800 Anfragen/Tag) <ChevronRight size={12} />
             </a>
 
-            <label className="text-xs text-[#6B7590] block mb-2">Trade-Horizont (Abstand von Stop &amp; Ziel, in ATR)</label>
+            <label className="text-xs text-[#8C96A8] block mb-2">Trade-Horizont (Abstand von Stop &amp; Ziel, in ATR)</label>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 mb-3">
               {Object.entries(TRADE_STYLES).map(([key, s]) => {
                 const active = tradeStyle === key;
@@ -535,27 +535,27 @@ export default function TheDailyTrade() {
                     onClick={() => changeTradeStyle(key)}
                     className="text-left px-3 py-2 rounded-lg border transition-colors"
                     style={active
-                      ? { background: "#EAF0FF", borderColor: "#5B8CFF" }
-                      : { background: "transparent", borderColor: "#E1E5F0" }}
+                      ? { background: "#1D2B4A", borderColor: "#5B8CFF" }
+                      : { background: "transparent", borderColor: "#2A3341" }}
                   >
-                    <div className="text-xs font-semibold" style={{ color: active ? "#2B4FDB" : "#4A5570" }}>{s.label}</div>
-                    <div className="text-[10px] text-[#7B8399] mt-0.5">Stop {s.sl.toLocaleString("de-DE")}× · Ziel {s.tp.toLocaleString("de-DE")}× ATR</div>
-                    <div className="text-[10px] text-[#7B8399]">{s.desc}</div>
+                    <div className="text-xs font-semibold" style={{ color: active ? "#9DB8FF" : "#B7C0CE" }}>{s.label}</div>
+                    <div className="text-[10px] text-[#7E8899] mt-0.5">Stop {s.sl.toLocaleString("de-DE")}× · Ziel {s.tp.toLocaleString("de-DE")}× ATR</div>
+                    <div className="text-[10px] text-[#7E8899]">{s.desc}</div>
                   </button>
                 );
               })}
             </div>
 
             {tradeStyle === "scalp" && (
-              <div className="flex items-start gap-2 bg-[#FFF6E9] border border-[#F0DBAE] rounded-lg px-3 py-2 mb-4">
-                <AlertTriangle size={13} color="#C9862E" className="mt-0.5 shrink-0" />
-                <p className="text-[10px] text-[#8A6420] leading-relaxed">
+              <div className="flex items-start gap-2 bg-[#2A2113] border border-[#4D3B17] rounded-lg px-3 py-2 mb-4">
+                <AlertTriangle size={13} color="#E3A94F" className="mt-0.5 shrink-0" />
+                <p className="text-[10px] text-[#D9B36A] leading-relaxed">
                   Scalping-Hinweis: Die Analyse basiert auf <strong>Tageskerzen</strong> — echtes Sekunden-/Minuten-Scalping bräuchte Intraday-Daten. Die Level sind hier sehr eng, dadurch fallen Spread &amp; Slippage deutlich stärker ins Gewicht.
                 </p>
               </div>
             )}
 
-            <label className="text-xs text-[#6B7590] block mb-2">Watchlist (max. Anfragen = Instrumente; Free-Tier: 5/Min, 25/Tag)</label>
+            <label className="text-xs text-[#8C96A8] block mb-2">Watchlist (max. Anfragen = Instrumente; Free-Tier: 5/Min, 25/Tag)</label>
             <div className="flex flex-wrap gap-2">
               {UNIVERSE.map((u) => {
                 const active = selected.includes(u.pair);
@@ -565,8 +565,8 @@ export default function TheDailyTrade() {
                     onClick={() => toggleSymbol(u.pair)}
                     className="fsd-mono text-xs px-3 py-1.5 rounded-full border transition-colors"
                     style={active
-                      ? { background: "#EAF0FF", borderColor: "#5B8CFF", color: "#2B4FDB" }
-                      : { background: "transparent", borderColor: "#E1E5F0", color: "#7B8399" }}
+                      ? { background: "#1D2B4A", borderColor: "#5B8CFF", color: "#9DB8FF" }
+                      : { background: "transparent", borderColor: "#2A3341", color: "#7E8899" }}
                   >
                     {u.pair}
                   </button>
@@ -583,22 +583,23 @@ export default function TheDailyTrade() {
           const low = remaining < nextScanNeeds;
           return (
         <div className="mt-4 flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
-          <div className="text-xs text-[#7B8399]">
+          <div className="text-xs text-[#7E8899]">
             <div>{lastRun ? `Letzter Scan: ${lastRun.toLocaleString("de-DE")}` : "Noch kein Scan durchgeführt."}</div>
             <div className="mt-0.5">
-              API-Anfragen heute: <span className="fsd-mono" style={{ color: low ? "#C9862E" : "#4A5570" }}>{quotaUsed}/{DAILY_LIMIT}</span>
-              {" · "}noch <span className="fsd-mono" style={{ color: low ? "#C9862E" : "#4A5570" }}>{remaining}</span> übrig (geschätzt)
+              API-Anfragen heute: <span className="fsd-mono" style={{ color: low ? "#E3A94F" : "#B7C0CE" }}>{quotaUsed}/{DAILY_LIMIT}</span>
+              {" · "}noch <span className="fsd-mono" style={{ color: low ? "#E3A94F" : "#B7C0CE" }}>{remaining}</span> übrig (geschätzt)
               {nextScanNeeds > 0 && <> · nächster Scan braucht bis zu <span className="fsd-mono">{nextScanNeeds}</span></>}
               {nextScanNeeds === 0 && selected.length > 0 && <> · nächster Scan läuft komplett aus dem Tages-Cache</>}
             </div>
             {low && (
-              <div className="mt-0.5 text-[#C9862E]">Achtung: Das Tageslimit reicht evtl. nicht für alle gewählten Instrumente.</div>
+              <div className="mt-0.5 text-[#E3A94F]">Achtung: Das Tageslimit reicht evtl. nicht für alle gewählten Instrumente.</div>
             )}
           </div>
           <button
             onClick={runAnalysis}
             disabled={analyzing}
             className="flex items-center justify-center gap-2 bg-[#E0A458] hover:bg-[#EAB876] disabled:opacity-50 disabled:cursor-not-allowed text-[#1A1206] font-semibold text-sm px-5 py-2.5 rounded-lg transition-colors"
+            style={{ boxShadow: "0 0 24px rgba(224,164,88,0.25)" }}
           >
             <RefreshCw size={15} className={analyzing ? "animate-spin" : ""} />
             {analyzing ? "Analysiere..." : "Markt-Scan starten"}
@@ -609,19 +610,19 @@ export default function TheDailyTrade() {
 
         {/* Progress */}
         {analyzing && (
-          <div className="mt-3 bg-[#FFFFFF] border border-[#E1E5F0] rounded-lg px-4 py-3">
-            <div className="relative h-1 bg-[#ECEFF6] rounded-full overflow-hidden mb-2">
+          <div className="mt-3 bg-[#161B22] border border-[#2A3341] rounded-lg px-4 py-3">
+            <div className="relative h-1 bg-[#232B36] rounded-full overflow-hidden mb-2">
               <div className="fsd-sweep absolute top-0 left-0 h-full w-1/5 bg-[#E0A458] rounded-full" />
             </div>
-            <div className="fsd-mono text-xs text-[#6B7590]">{progressMsg}</div>
+            <div className="fsd-mono text-xs text-[#8C96A8]">{progressMsg}</div>
           </div>
         )}
 
         {/* Error */}
         {error && !analyzing && (
-          <div className="mt-3 flex items-start gap-2 bg-[#FDEEEC] border border-[#F5C6BE] rounded-lg px-3 py-2.5">
-            <Info size={14} color="#D6503A" className="mt-0.5 shrink-0" />
-            <p className="text-xs text-[#B23A26]">{error}</p>
+          <div className="mt-3 flex items-start gap-2 bg-[#2C1613] border border-[#5A2A22] rounded-lg px-3 py-2.5">
+            <Info size={14} color="#E5695A" className="mt-0.5 shrink-0" />
+            <p className="text-xs text-[#F09383]">{error}</p>
           </div>
         )}
 
@@ -629,15 +630,15 @@ export default function TheDailyTrade() {
         {top3.length > 0 && (
           <div className="mt-6">
             <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
-              <h2 className="fsd-display text-sm font-semibold text-[#6B7590] uppercase tracking-wide">Top {top3.length} Trade-Vorschläge</h2>
+              <h2 className="fsd-display text-sm font-semibold text-[#8C96A8] uppercase tracking-wide">Top {top3.length} Trade-Vorschläge</h2>
               <div className="flex items-center gap-2">
                 {tdQuotaUsed > 0 && (
-                  <span className="fsd-mono text-[10px] text-[#8892A8]">{tdQuotaUsed}/{TD_DAILY_LIMIT} heute</span>
+                  <span className="fsd-mono text-[10px] text-[#6F7A8C]">{tdQuotaUsed}/{TD_DAILY_LIMIT} heute</span>
                 )}
                 <button
                   onClick={refreshLive}
                   disabled={liveUpdating}
-                  className="flex items-center gap-1.5 text-[11px] font-medium px-3 py-1.5 rounded-lg border border-[#E1E5F0] hover:bg-[#F0F2F8] text-[#4A5570] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  className="flex items-center gap-1.5 text-[11px] font-medium px-3 py-1.5 rounded-lg border border-[#2A3341] hover:bg-[#1C232D] text-[#B7C0CE] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                   <Zap size={12} color="#E0A458" />
                   {liveUpdating ? "Hole Live-Kurse..." : "Live-Kurse holen"}
@@ -653,20 +654,20 @@ export default function TheDailyTrade() {
         {/* Full ranking */}
         {rest.length > 0 && (
           <div className="mt-8">
-            <h2 className="fsd-display text-sm font-semibold text-[#6B7590] uppercase tracking-wide mb-3">Weitere gescannte Instrumente</h2>
-            <div className="bg-[#FFFFFF] border border-[#E1E5F0] rounded-xl overflow-hidden">
+            <h2 className="fsd-display text-sm font-semibold text-[#8C96A8] uppercase tracking-wide mb-3">Weitere gescannte Instrumente</h2>
+            <div className="bg-[#161B22] border border-[#2A3341] rounded-xl overflow-hidden">
               {rest.map((r, i) => (
-                <div key={r.pair} className={`flex items-center justify-between px-4 py-3 ${i !== rest.length - 1 ? "border-b border-[#ECEFF6]" : ""}`}>
+                <div key={r.pair} className={`flex items-center justify-between px-4 py-3 ${i !== rest.length - 1 ? "border-b border-[#232B36]" : ""}`}>
                   <div className="flex items-center gap-3">
-                    <span className="fsd-mono text-xs text-[#8892A8] w-5">{i + 4}</span>
+                    <span className="fsd-mono text-xs text-[#6F7A8C] w-5">{i + 4}</span>
                     <span className="fsd-display text-sm font-medium">{r.pair}</span>
-                    <span className="fsd-mono text-[10px]" style={{ color: r.direction === "LONG" ? "#2F9E6E" : "#D6503A" }}>{r.direction}</span>
+                    <span className="fsd-mono text-[10px]" style={{ color: r.direction === "LONG" ? "#3DBB85" : "#E5695A" }}>{r.direction}</span>
                   </div>
                   <div className="flex items-center gap-4">
                     <div className="w-24 hidden sm:block">
                       <Sparkline data={r.spark} dec={decimalsFor(r.pair)} height={24} showArea={false} />
                     </div>
-                    <span className="fsd-mono text-sm text-[#6B7590] w-8 text-right">{Math.round(r.composite)}</span>
+                    <span className="fsd-mono text-sm text-[#8C96A8] w-8 text-right">{Math.round(r.composite)}</span>
                   </div>
                 </div>
               ))}
@@ -677,10 +678,10 @@ export default function TheDailyTrade() {
         {/* Score history */}
         {history.length > 0 && (
           <div className="mt-8">
-            <h2 className="fsd-display text-sm font-semibold text-[#6B7590] uppercase tracking-wide mb-3 flex items-center gap-1.5">
+            <h2 className="fsd-display text-sm font-semibold text-[#8C96A8] uppercase tracking-wide mb-3 flex items-center gap-1.5">
               <History size={14} /> Score-Verlauf
             </h2>
-            <div className="bg-[#FFFFFF] border border-[#E1E5F0] rounded-xl p-5">
+            <div className="bg-[#161B22] border border-[#2A3341] rounded-xl p-5">
               <ScoreHistoryChart history={history} pairs={historyPairs} />
             </div>
           </div>
@@ -688,9 +689,9 @@ export default function TheDailyTrade() {
 
         {/* Empty state */}
         {results.length === 0 && !analyzing && (
-          <div className="mt-10 text-center py-12 border border-dashed border-[#E1E5F0] rounded-xl">
-            <Radio size={28} color="#D3D8E4" className="mx-auto mb-3" />
-            <p className="text-sm text-[#7B8399]">Trage deinen API-Key ein und starte den ersten Scan,<br />um deine Top-Trade-Vorschläge zu sehen.</p>
+          <div className="mt-10 text-center py-12 border border-dashed border-[#2A3341] rounded-xl">
+            <Radio size={28} color="#2E3947" className="mx-auto mb-3" />
+            <p className="text-sm text-[#7E8899]">Trage deinen API-Key ein und starte den ersten Scan,<br />um deine Top-Trade-Vorschläge zu sehen.</p>
           </div>
         )}
         </>}

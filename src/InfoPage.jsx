@@ -2,11 +2,11 @@ import { AlertTriangle, TrendingUp, Gauge, Activity, Target, Database, LineChart
 
 function Section({ icon: Icon, iconColor, title, children }) {
   return (
-    <div className="bg-[#FFFFFF] border border-[#E1E5F0] rounded-xl p-5">
-      <h3 className="fsd-display text-sm font-semibold text-[#1D2433] mb-2 flex items-center gap-2">
+    <div className="bg-[#161B22] border border-[#2A3341] rounded-xl p-5">
+      <h3 className="fsd-display text-sm font-semibold text-[#E8ECF2] mb-2 flex items-center gap-2">
         <Icon size={15} color={iconColor} /> {title}
       </h3>
-      <div className="text-xs text-[#4A5570] leading-relaxed flex flex-col gap-2">{children}</div>
+      <div className="text-xs text-[#B7C0CE] leading-relaxed flex flex-col gap-2">{children}</div>
     </div>
   );
 }
@@ -37,7 +37,7 @@ export default function InfoPage({ styles }) {
         </p>
       </Section>
 
-      <Section icon={Gauge} iconColor="#2F9E6E" title="Wie entsteht der Score?">
+      <Section icon={Gauge} iconColor="#3DBB85" title="Wie entsteht der Score?">
         <p>Jedes Paar wird nach drei Bausteinen bewertet, die zum Gesamt-Score gewichtet werden:</p>
         <div className="flex flex-col gap-1.5 mt-1">
           <div className="flex items-center gap-2">
@@ -49,7 +49,7 @@ export default function InfoPage({ styles }) {
             <span><strong>Momentum (40 %):</strong> RSI (14) und MACD messen, ob die Bewegung gerade Schwung in Trendrichtung hat oder ausläuft.</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: "#2F9E6E" }} />
+            <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: "#3DBB85" }} />
             <span><strong>Volatilität (20 %):</strong> Die mittlere Tagesschwankung (ATR) sollte weder eingeschlafen noch hektisch sein — Ideal ist ein mittlerer Bereich (~0,6 % pro Tag).</span>
           </div>
         </div>
@@ -58,7 +58,7 @@ export default function InfoPage({ styles }) {
         </p>
       </Section>
 
-      <Section icon={TrendingUp} iconColor="#D6503A" title="Entry, Stop und Ziel">
+      <Section icon={TrendingUp} iconColor="#E5695A" title="Entry, Stop und Ziel">
         <p>
           Der <strong>Entry</strong> ist der letzte Kurs (Tagesschluss oder Live-Kurs). Stop und Ziel
           werden als Vielfaches der ATR gesetzt — wie weit, bestimmt dein <strong>Trade-Horizont</strong> in
@@ -67,7 +67,7 @@ export default function InfoPage({ styles }) {
         <div className="overflow-x-auto fsd-scrollbar">
           <table className="w-full text-[11px] mt-1">
             <thead>
-              <tr className="text-left text-[#6B7590] border-b border-[#ECEFF6]">
+              <tr className="text-left text-[#8C96A8] border-b border-[#232B36]">
                 <th className="py-1.5 pr-3 font-medium">Horizont</th>
                 <th className="py-1.5 pr-3 font-medium">Stop</th>
                 <th className="py-1.5 pr-3 font-medium">Ziel</th>
@@ -76,8 +76,8 @@ export default function InfoPage({ styles }) {
             </thead>
             <tbody className="fsd-mono">
               {Object.values(styles).map((s) => (
-                <tr key={s.label} className="border-b border-[#ECEFF6] last:border-0">
-                  <td className="py-1.5 pr-3 text-[#1D2433]">{s.label}</td>
+                <tr key={s.label} className="border-b border-[#232B36] last:border-0">
+                  <td className="py-1.5 pr-3 text-[#E8ECF2]">{s.label}</td>
                   <td className="py-1.5 pr-3">{s.sl.toLocaleString("de-DE")}× ATR</td>
                   <td className="py-1.5 pr-3">{s.tp.toLocaleString("de-DE")}× ATR</td>
                   <td className="py-1.5">{s.desc.split("·")[1]?.trim() ?? s.desc}</td>
@@ -93,7 +93,7 @@ export default function InfoPage({ styles }) {
         </p>
       </Section>
 
-      <Section icon={LineChart} iconColor="#4a3aa7" title="Score-Verlauf">
+      <Section icon={LineChart} iconColor="#9085e9" title="Score-Verlauf">
         <p>
           Jeder Scan speichert die Scores aller Paare lokal in deinem Browser (bis zu 90 Tage).
           Der Verlaufs-Chart unten auf der Scan-Seite zeigt, wie sich die Bewertung jedes Paares
@@ -101,7 +101,7 @@ export default function InfoPage({ styles }) {
         </p>
       </Section>
 
-      <Section icon={Activity} iconColor="#8892A8" title="Gut zu wissen">
+      <Section icon={Activity} iconColor="#6F7A8C" title="Gut zu wissen">
         <p>
           Alle Daten (API-Keys, Watchlist, Verlauf) bleiben ausschließlich in deinem Browser —
           nichts wird auf einem Server gespeichert. Jeder Nutzer der App braucht daher seine
@@ -109,9 +109,9 @@ export default function InfoPage({ styles }) {
         </p>
       </Section>
 
-      <div className="flex items-start gap-2 bg-[#FFF6E9] border border-[#F0DBAE] rounded-lg px-3 py-2.5">
-        <AlertTriangle size={14} color="#C9862E" className="mt-0.5 shrink-0" />
-        <p className="text-[11px] text-[#8A6420] leading-relaxed">
+      <div className="flex items-start gap-2 bg-[#2A2113] border border-[#4D3B17] rounded-lg px-3 py-2.5">
+        <AlertTriangle size={14} color="#E3A94F" className="mt-0.5 shrink-0" />
+        <p className="text-[11px] text-[#D9B36A] leading-relaxed">
           The Daily Trade ist ein Bildungs-Werkzeug. Technische Indikatoren beschreiben die
           Vergangenheit — sie garantieren keine künftigen Kursbewegungen. Keine Anlageberatung;
           Trading birgt Verlustrisiko. Triff Entscheidungen eigenverantwortlich und riskiere nur
