@@ -14,6 +14,11 @@ export const PAIR_STYLE = {
   "EUR/GBP": { color: "#d95926" },
   "EUR/JPY": { color: "#3987e5", dash: true },
   "GBP/JPY": { color: "#199e70", dash: true },
+  // Metalle
+  "XAU/USD": { color: "#c98500" },
+  "XAG/USD": { color: "#3987e5" },
+  "XPT/USD": { color: "#199e70" },
+  "XPD/USD": { color: "#9085e9" },
 };
 
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));

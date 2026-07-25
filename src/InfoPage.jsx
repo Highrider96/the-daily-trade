@@ -16,7 +16,8 @@ export default function InfoPage({ styles }) {
     <div className="mt-4 flex flex-col gap-4 pb-4">
       <Section icon={Target} iconColor="#E0A458" title="Was macht The Daily Trade?">
         <p>
-          Die App scannt deine Watchlist aus Forex-Paaren einmal täglich, bewertet jedes Paar mit einem
+          Die App scannt deine Watchlist aus Forex-Paaren und Edelmetallen (Gold, Silber, Platin, Palladium)
+          einmal täglich, bewertet jedes Instrument mit einem
           Punktwert von 0–100 (dem <strong>Score</strong>) und schlägt die drei aussichtsreichsten Setups
           als Trade-Karten vor — inklusive Richtung (LONG/SHORT), Einstieg, Stop und Ziel. Sie ist ein
           regelbasiertes Analyse- und Lernwerkzeug: Alle Bewertungen folgen festen Formeln, es gibt keine
@@ -26,9 +27,10 @@ export default function InfoPage({ styles }) {
 
       <Section icon={Database} iconColor="#5B8CFF" title="Woher kommen die Daten?">
         <p>
-          Kursdaten (Tageskerzen der letzten ~100 Handelstage) liefert <strong>Alpha Vantage</strong> —
-          kostenlos, aber begrenzt auf 25 Anfragen pro Tag. Deshalb merkt sich die App einmal geladene
-          Kurse für den Rest des Tages und zeigt dir einen Zähler der verbleibenden Anfragen.
+          Kursdaten (Tageskerzen der letzten ~100 Handelstage) liefert im <strong>Forex</strong>-Reiter
+          <strong> Alpha Vantage</strong> (kostenlos, 25 Anfragen/Tag), im <strong>Metalle</strong>-Reiter
+          <strong> Twelve Data</strong> (kostenlos, 800 Anfragen/Tag). Deshalb merkt sich die App einmal
+          geladene Kurse für den Rest des Tages und zeigt dir einen Zähler der verbleibenden Anfragen.
         </p>
         <p>
           Optional holt der Button <strong>„Live-Kurse holen"</strong> über einen zweiten kostenlosen
