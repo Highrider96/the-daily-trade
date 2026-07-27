@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { RefreshCw, TrendingUp, TrendingDown, AlertTriangle, Info, X, ChevronRight, Radio, History, Zap, BookOpen } from "lucide-react";
 import { Sparkline, ScoreHistoryChart } from "./Charts.jsx";
+import DataSync from "./DataSync.jsx";
 import {
   TRADE_STYLES, storageGet, storageSet, storageHas, todayKey, sleep,
   analyzePair, fetchDaily, fetchLiveRatesRobust,
@@ -339,6 +340,8 @@ export default function ScanView({ market, avKey, setAvKey, tdKey, setTdKey, tra
               );
             })}
           </div>
+
+          <DataSync />
         </div>
       )}
 
