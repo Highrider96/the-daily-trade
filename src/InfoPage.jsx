@@ -1,4 +1,4 @@
-import { AlertTriangle, TrendingUp, Gauge, Activity, Target, Database, LineChart } from "lucide-react";
+import { AlertTriangle, TrendingUp, Gauge, Activity, Target, Database, LineChart, BookOpen } from "lucide-react";
 
 function Section({ icon: Icon, iconColor, title, children }) {
   return (
@@ -100,6 +100,17 @@ export default function InfoPage({ styles }) {
           Jeder Scan speichert die Scores aller Paare lokal in deinem Browser (bis zu 90 Tage).
           Der Verlaufs-Chart unten auf der Scan-Seite zeigt, wie sich die Bewertung jedes Paares
           über die Zeit entwickelt — so erkennst du, ob ein Setup gerade stärker oder schwächer wird.
+        </p>
+      </Section>
+
+      <Section icon={BookOpen} iconColor="#E0A458" title="Journal">
+        <p>
+          Im <strong>Journal</strong>-Reiter trägst du deine tatsächlich gehandelten Trades ein — manuell
+          oder per <em>„Ins Journal übernehmen"</em> direkt aus einem Vorschlag. Die App berechnet daraus
+          deine <strong>Trefferquote</strong> und das <strong>R-Vielfache</strong> (Gewinn/Verlust im
+          Verhältnis zum Risiko, also dem Abstand Einstieg → Stop) und schlüsselt deine Ergebnisse nach
+          Score-Klasse, Horizont und Instrument auf. So siehst du schwarz auf weiß, welche Setups bei dir
+          wirklich funktionieren.
         </p>
       </Section>
 

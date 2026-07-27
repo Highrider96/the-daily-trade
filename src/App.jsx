@@ -2,11 +2,13 @@ import { useState, useEffect } from "react";
 import { Settings2, Radio } from "lucide-react";
 import ScanView from "./ScanView.jsx";
 import InfoPage from "./InfoPage.jsx";
+import Journal from "./Journal.jsx";
 import { MARKETS, TRADE_STYLES, storageGet, storageSet, pruneOldCaches } from "./engine.js";
 
 export default function TheDailyTrade() {
-  const [view, setView] = useState("forex"); // forex | metals | info
+  const [view, setView] = useState("forex"); // forex | metals | trades | info
   const [showSettings, setShowSettings] = useState(true);
+  const [journalDraft, setJournalDraft] = useState(null);
   const [avKey, setAvKeyState] = useState(() => storageGet("fsd:apiKey") ?? "");
   const [tdKey, setTdKeyState] = useState(() => storageGet("fsd:tdKey") ?? "");
   const [tradeStyle, setTradeStyleState] = useState(() => {
@@ -21,12 +23,17 @@ export default function TheDailyTrade() {
   const setTdKey = (v) => { setTdKeyState(v); storageSet("fsd:tdKey", v); };
   const setTradeStyle = (v) => { setTradeStyleState(v); storageSet("fsd:tradeStyle", v); };
 
+  const isScan = view === "forex" || view === "metals";
   const activeMarket = view === "metals" ? MARKETS.metals : MARKETS.forex;
   const subtitle = view === "info"
     ? "Regelbasierte Tages-Analyse"
-    : `Regelbasierte Tages-Analyse · ${activeMarket.subtitle}`;
+    : view === "trades"
+      ? "Handels-Journal & Auswertung"
+      : `Regelbasierte Tages-Analyse · ${activeMarket.subtitle}`;
 
-  const tabs = [["forex", "Forex"], ["metals", "Metalle"], ["info", "Funktionsweise"]];
+  const logTrade = (prefill) => { setJournalDraft(prefill); setView("trades"); };
+
+  const tabs = [["forex", "Forex"], ["metals", "Metalle"], ["trades", "Journal"], ["info", "Funktionsweise"]];
 
   return (
     <div className="fsd-root min-h-screen bg-[#0E1116] text-[#E8ECF2] pb-16">
@@ -42,7 +49,7 @@ export default function TheDailyTrade() {
           </div>
           <button
             onClick={() => {
-              if (view === "info") { setView("forex"); setShowSettings(true); }
+              if (!isScan) { setView("forex"); setShowSettings(true); }
               else setShowSettings((s) => !s);
             }}
             className="p-2 rounded-lg border border-[#2A3341] hover:bg-[#1C232D] transition-colors"
@@ -69,7 +76,8 @@ export default function TheDailyTrade() {
 
       <div className="max-w-5xl mx-auto px-4">
         {view === "info" && <InfoPage styles={TRADE_STYLES} />}
-        {view !== "info" && (
+        {view === "trades" && <Journal draft={journalDraft} clearDraft={() => setJournalDraft(null)} />}
+        {isScan && (
           <ScanView
             key={activeMarket.id}
             market={activeMarket}
@@ -81,6 +89,7 @@ export default function TheDailyTrade() {
             setTradeStyle={setTradeStyle}
             showSettings={showSettings}
             setShowSettings={setShowSettings}
+            onLogTrade={logTrade}
           />
         )}
       </div>

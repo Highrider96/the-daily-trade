@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { RefreshCw, TrendingUp, TrendingDown, AlertTriangle, Info, X, ChevronRight, Radio, History, Zap } from "lucide-react";
+import { RefreshCw, TrendingUp, TrendingDown, AlertTriangle, Info, X, ChevronRight, Radio, History, Zap, BookOpen } from "lucide-react";
 import { Sparkline, ScoreHistoryChart } from "./Charts.jsx";
 import {
   TRADE_STYLES, storageGet, storageSet, storageHas, todayKey, sleep,
@@ -41,7 +41,7 @@ function ConvictionDial({ score, direction }) {
   );
 }
 
-function TopPickCard({ result, rank, style, live }) {
+function TopPickCard({ result, rank, style, live, onLog }) {
   const isLong = result.direction === "LONG";
   const color = isLong ? "#3DBB85" : "#E5695A";
   const dec = result.dec;
@@ -103,12 +103,26 @@ function TopPickCard({ result, rank, style, live }) {
         <ScoreBar label="Volatilität" value={result.volScore} tone="vol" />
       </div>
       <div className="text-[10px] text-[#7E8899] fsd-mono">CRV 1:{crv} · grob {minDays}–{maxDays} Handelstage · Stand {result.lastDate}</div>
+      <button
+        onClick={() => onLog({
+          instrument: result.pair,
+          direction: result.direction,
+          entry: anchor.toFixed(dec),
+          stop: sl.toFixed(dec),
+          target: tp.toFixed(dec),
+          scoreAtEntry: String(Math.round(result.composite)),
+          style,
+        })}
+        className="flex items-center justify-center gap-1.5 text-[11px] font-medium py-1.5 rounded-lg border border-[#2A3341] hover:bg-[#1C232D] text-[#B7C0CE] transition-colors"
+      >
+        <BookOpen size={12} color="#E0A458" /> Ins Journal übernehmen
+      </button>
     </div>
   );
 }
 
 // ---------- Wiederverwendbare Scan-Ansicht (Forex / Metalle / …) ----------
-export default function ScanView({ market, avKey, setAvKey, tdKey, setTdKey, tradeStyle, setTradeStyle, showSettings, setShowSettings }) {
+export default function ScanView({ market, avKey, setAvKey, tdKey, setTdKey, tradeStyle, setTradeStyle, showSettings, setShowSettings, onLogTrade }) {
   const uni = market.universe;
   const provider = market.provider;
 
@@ -391,7 +405,7 @@ export default function ScanView({ market, avKey, setAvKey, tdKey, setTdKey, tra
             </div>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {top3.map((r, i) => <TopPickCard key={r.pair} result={r} rank={i + 1} style={tradeStyle} live={liveRates[r.pair]} />)}
+            {top3.map((r, i) => <TopPickCard key={r.pair} result={r} rank={i + 1} style={tradeStyle} live={liveRates[r.pair]} onLog={onLogTrade} />)}
           </div>
         </div>
       )}
