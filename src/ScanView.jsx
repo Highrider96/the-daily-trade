@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { RefreshCw, TrendingUp, TrendingDown, AlertTriangle, Info, X, ChevronRight, Radio, History, Zap, BookOpen } from "lucide-react";
 import { Sparkline, ScoreHistoryChart } from "./Charts.jsx";
 import DataSync from "./DataSync.jsx";
+import Backtest from "./Backtest.jsx";
 import {
   TRADE_STYLES, storageGet, storageSet, storageHas, todayKey, sleep,
   analyzePair, fetchDaily, fetchLiveRatesRobust,
@@ -456,6 +457,11 @@ export default function ScanView({ market, avKey, setAvKey, tdKey, setTdKey, tra
           <p className="text-sm text-[#7E8899]">Trage deinen {market.keyName} ein und starte den ersten Scan,<br />um deine Top-Trade-Vorschläge zu sehen.</p>
         </div>
       )}
+
+      {/* Backtest */}
+      <div className="mt-10 pt-6 border-t border-[#232B36]">
+        <Backtest market={market} avKey={avKey} tdKey={tdKey} tradeStyle={tradeStyle} selected={selected} />
+      </div>
     </>
   );
 }

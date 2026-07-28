@@ -3,7 +3,7 @@ import { Download, Upload } from "lucide-react";
 
 // Ephemere Tages-Daten (Cache, Kontingent-Zähler) werden nicht exportiert —
 // nur dauerhafte Nutzerdaten: Keys, Watchlists, Verlauf, Trade-Journal, Horizont.
-const isEphemeral = (k) => k.includes(":cache:") || k.startsWith("fsd:quota:") || k.startsWith("fsd:tdquota:");
+const isEphemeral = (k) => k.includes(":cache:") || k.includes(":bt:") || k.startsWith("fsd:quota:") || k.startsWith("fsd:tdquota:");
 
 function collectData() {
   const data = {};

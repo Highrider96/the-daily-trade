@@ -28,7 +28,7 @@ export function pruneOldCaches() {
     for (let i = 0; i < localStorage.length; i++) {
       const k = localStorage.key(i);
       if (!k || !k.startsWith("fsd:")) continue;
-      const dated = k.includes(":cache:") || k.startsWith("fsd:quota:") || k.startsWith("fsd:tdquota:");
+      const dated = k.includes(":cache:") || k.includes(":bt:") || k.startsWith("fsd:quota:") || k.startsWith("fsd:tdquota:");
       if (dated && !k.endsWith(today)) stale.push(k);
     }
     stale.forEach((k) => localStorage.removeItem(k));
@@ -101,8 +101,12 @@ export const MARKETS = {
 };
 
 export const cacheKeyFor = (market, pair) => `${market.prefix}:cache:${pair}:${todayKey()}`;
+export const backtestCacheKey = (market, pair) => `${market.prefix}:bt:${pair}:${todayKey()}`;
 export const watchlistKeyFor = (market) => `${market.prefix}:watchlist`;
 export const historyKeyFor = (market) => `${market.prefix}:history`;
+
+// Wie viele historische Kerzen der Backtest maximal nutzt (~3 Jahre).
+export const BACKTEST_BARS = 800;
 
 export const AV_QUOTA_KEY = () => `fsd:quota:${todayKey()}`;
 export const TD_QUOTA_KEY = () => `fsd:tdquota:${todayKey()}`;
@@ -194,6 +198,49 @@ export function analyzePair(candles, inst) {
   };
 }
 
+// Walk-Forward-Backtest: geht chronologisch durch die Historie, bewertet an jedem
+// Tag NUR mit den bis dahin bekannten Kerzen (kein Zukunfts-Blick) und simuliert
+// nacheinander nicht-überlappende Trades mit Stop/Ziel des gewählten Horizonts.
+// Ausstieg: Stop oder Ziel je nachdem, was zuerst berührt wird (Gleichzeitig = Stop).
+export function runBacktest(candles, style, inst) {
+  const { sl: slMult, tp: tpMult } = TRADE_STYLES[style];
+  const warmup = 55; // genug für SMA50 + MACD/ATR
+  const trades = [];
+  let i = warmup;
+  while (i < candles.length - 1) {
+    const a = analyzePair(candles.slice(0, i + 1), inst);
+    if (!(a.atr > 0)) { i++; continue; }
+    const isLong = a.direction === "LONG";
+    const entry = candles[i].close;
+    const risk = slMult * a.atr;
+    const stop = isLong ? entry - risk : entry + risk;
+    const target = isLong ? entry + tpMult * a.atr : entry - tpMult * a.atr;
+
+    let j = i + 1, outcome = null;
+    for (; j < candles.length; j++) {
+      const c = candles[j];
+      if (isLong) {
+        if (c.low <= stop) { outcome = "loss"; break; }
+        if (c.high >= target) { outcome = "win"; break; }
+      } else {
+        if (c.high >= stop) { outcome = "loss"; break; }
+        if (c.low <= target) { outcome = "win"; break; }
+      }
+    }
+    let r;
+    if (outcome === "win") r = tpMult / slMult;
+    else if (outcome === "loss") r = -1;
+    else { // bis Datenende nicht ausgelöst → zum letzten Kurs schließen
+      j = candles.length - 1;
+      const last = candles[j].close;
+      r = (isLong ? last - entry : entry - last) / risk;
+    }
+    trades.push({ pair: inst.pair, entryDate: candles[i].date, exitDate: candles[j].date, direction: a.direction, r, win: r > 0, score: a.composite, bars: j - i });
+    i = j + 1; // nächster Trade erst nach dem Schließen
+  }
+  return trades;
+}
+
 // ---------- Datenquellen ----------
 // Alpha Vantage FX_DAILY (Forex)
 async function fetchFXDaily(inst, apiKey) {
@@ -251,6 +298,45 @@ export function fetchDaily(inst, market, keys) {
   return market.provider === "av"
     ? fetchFXDaily(inst, keys.avKey)
     : fetchTDDaily(inst, keys.tdKey);
+}
+
+// Volle Historie (für den Backtest). Ein Aufruf pro Instrument.
+async function fetchFXDailyFull(inst, apiKey) {
+  const url = `https://www.alphavantage.co/query?function=FX_DAILY&from_symbol=${inst.from}&to_symbol=${inst.to}&outputsize=full&apikey=${apiKey}`;
+  let res;
+  try { res = await fetch(url); } catch { throw new Error(`Verbindung zu Alpha Vantage fehlgeschlagen (${inst.pair}).`); }
+  if (!res.ok) throw new Error(`HTTP-Fehler (${res.status}) bei ${inst.pair}.`);
+  const data = await res.json();
+  if (data["Note"]) throw new Error("Rate-Limit erreicht: " + data["Note"]);
+  if (data["Information"]) throw new Error(data["Information"]);
+  if (data["Error Message"]) throw new Error("API-Fehler: " + data["Error Message"]);
+  const series = data["Time Series FX (Daily)"];
+  if (!series) throw new Error(`Keine Daten für ${inst.pair} erhalten.`);
+  return Object.keys(series).sort().map((d) => ({
+    date: d,
+    open: parseFloat(series[d]["1. open"]), high: parseFloat(series[d]["2. high"]),
+    low: parseFloat(series[d]["3. low"]), close: parseFloat(series[d]["4. close"]),
+  }));
+}
+
+async function fetchTDDailyFull(inst, tdKey) {
+  const url = `https://api.twelvedata.com/time_series?symbol=${encodeURIComponent(inst.pair)}&interval=1day&outputsize=${BACKTEST_BARS}&apikey=${tdKey}`;
+  let res;
+  try { res = await fetch(url); } catch { throw new Error(`Verbindung zu Twelve Data fehlgeschlagen (${inst.pair}).`); }
+  if (!res.ok) throw new Error(`Twelve-Data-HTTP-Fehler (${res.status}) bei ${inst.pair}.`);
+  const data = await res.json();
+  if (data.status === "error") throw new Error(`Twelve Data (${inst.pair}): ` + (data.message || "Fehler"));
+  if (!data.values || !data.values.length) throw new Error(`Keine Daten für ${inst.pair} erhalten.`);
+  return data.values.map((v) => ({
+    date: v.datetime, open: parseFloat(v.open), high: parseFloat(v.high), low: parseFloat(v.low), close: parseFloat(v.close),
+  })).reverse();
+}
+
+export async function fetchDailyFull(inst, market, keys) {
+  const candles = market.provider === "av"
+    ? await fetchFXDailyFull(inst, keys.avKey)
+    : await fetchTDDailyFull(inst, keys.tdKey);
+  return candles.slice(-BACKTEST_BARS); // auf jüngste ~800 Kerzen kürzen (Speicher)
 }
 
 // ---------- Twelve Data: aktuelle Kurse (Live, für beide Märkte) ----------
