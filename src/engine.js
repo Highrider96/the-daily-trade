@@ -156,8 +156,52 @@ function computeEMAArray(values, period) {
   return out;
 }
 
+// ADX (Wilder, Standard-Periode 14) — misst die Trendstärke (0–100), nicht die
+// Richtung. Niedrig (< ~20) = Seitwärts/Range, hoch (> ~25) = ausgeprägter Trend.
+function computeADX(candles, period = 14) {
+  const len = candles.length;
+  if (len < period * 2 + 1) return null;
+  const plusDM = new Array(len).fill(0), minusDM = new Array(len).fill(0), tr = new Array(len).fill(0);
+  for (let i = 1; i < len; i++) {
+    const up = candles[i].high - candles[i - 1].high;
+    const down = candles[i - 1].low - candles[i].low;
+    plusDM[i] = up > down && up > 0 ? up : 0;
+    minusDM[i] = down > up && down > 0 ? down : 0;
+    const c = candles[i], p = candles[i - 1];
+    tr[i] = Math.max(c.high - c.low, Math.abs(c.high - p.close), Math.abs(c.low - p.close));
+  }
+  let atr = 0, sPlus = 0, sMinus = 0;
+  for (let i = 1; i <= period; i++) { atr += tr[i]; sPlus += plusDM[i]; sMinus += minusDM[i]; }
+  const dx = () => {
+    const pDI = atr === 0 ? 0 : (100 * sPlus) / atr;
+    const mDI = atr === 0 ? 0 : (100 * sMinus) / atr;
+    const den = pDI + mDI;
+    return den === 0 ? 0 : (100 * Math.abs(pDI - mDI)) / den;
+  };
+  const dxArr = [dx()];
+  for (let i = period + 1; i < len; i++) {
+    atr = atr - atr / period + tr[i];
+    sPlus = sPlus - sPlus / period + plusDM[i];
+    sMinus = sMinus - sMinus / period + minusDM[i];
+    dxArr.push(dx());
+  }
+  if (dxArr.length < period) return dxArr.reduce((a, b) => a + b, 0) / dxArr.length;
+  let adx = dxArr.slice(0, period).reduce((a, b) => a + b, 0) / period;
+  for (let i = period; i < dxArr.length; i++) adx = (adx * (period - 1) + dxArr[i]) / period;
+  return adx;
+}
+
+// Regime-Schwellen (Wilder-Konvention): unter WEAK gilt der Markt als
+// richtungslos, ab STRONG als klar trendend.
+export const ADX_WEAK = 20;
+export const ADX_STRONG = 25;
+// Gewicht des Regime-Bausteins im Gesamtscore (Rest: bisherige Formel).
+const ADX_WEIGHT = 0.2;
+
 // Analysiert Tageskerzen eines Instruments und liefert Scores + Trade-Idee.
-export function analyzePair(candles, inst) {
+// opts.useAdx=false rechnet den Score wie vor dem Regime-Filter (für A/B-Vergleich).
+export function analyzePair(candles, inst, opts = {}) {
+  const useAdx = opts.useAdx !== false;
   const closes = candles.map((c) => c.close);
   const lastClose = closes[closes.length - 1];
   const sma20 = computeSMA(closes, 20);
@@ -185,7 +229,15 @@ export function analyzePair(candles, inst) {
   const atrPct = (atr / lastClose) * 100;
   const volScore = clamp(100 - Math.abs(atrPct - 0.6) * 80, 0, 100);
 
-  const composite = trendScore * 0.4 + momentumScore * 0.4 + volScore * 0.2;
+  const baseComposite = trendScore * 0.4 + momentumScore * 0.4 + volScore * 0.2;
+
+  // Regime: ADX 15 → 0 Punkte, ADX 40 → 100 Punkte.
+  const adx = computeADX(candles, 14);
+  const adxScore = adx == null ? null : clamp((adx - 15) * 4, 0, 100);
+  const composite = useAdx && adxScore != null
+    ? baseComposite * (1 - ADX_WEIGHT) + adxScore * ADX_WEIGHT
+    : baseComposite;
+
   const direction = directionSign > 0 ? "LONG" : "SHORT";
   const entry = lastClose;
 
@@ -193,7 +245,8 @@ export function analyzePair(candles, inst) {
 
   return {
     pair: inst.pair, dec: inst.dec, pip: inst.pip,
-    trendScore, momentumScore, volScore, composite, direction, entry, atr, rsi, histogram, sma20, sma50, spark,
+    trendScore, momentumScore, volScore, adx, adxScore, baseComposite, composite,
+    direction, entry, atr, rsi, histogram, sma20, sma50, spark,
     lastDate: candles[candles.length - 1].date,
   };
 }
@@ -202,14 +255,19 @@ export function analyzePair(candles, inst) {
 // Tag NUR mit den bis dahin bekannten Kerzen (kein Zukunfts-Blick) und simuliert
 // nacheinander nicht-überlappende Trades mit Stop/Ziel des gewählten Horizonts.
 // Ausstieg: Stop oder Ziel je nachdem, was zuerst berührt wird (Gleichzeitig = Stop).
-export function runBacktest(candles, style, inst) {
+// opts.useAdx: Regime-Anteil im Score; opts.minAdx: Trendstärke-Filter;
+// opts.minScore: nur Signale ab diesem Gesamtscore handeln.
+export function runBacktest(candles, style, inst, opts = {}) {
   const { sl: slMult, tp: tpMult } = TRADE_STYLES[style];
   const warmup = 55; // genug für SMA50 + MACD/ATR
   const trades = [];
+  let skipped = 0;
   let i = warmup;
   while (i < candles.length - 1) {
-    const a = analyzePair(candles.slice(0, i + 1), inst);
+    const a = analyzePair(candles.slice(0, i + 1), inst, { useAdx: opts.useAdx });
     if (!(a.atr > 0)) { i++; continue; }
+    if (opts.minAdx != null && a.adx != null && a.adx < opts.minAdx) { skipped++; i++; continue; }
+    if (opts.minScore != null && a.composite < opts.minScore) { skipped++; i++; continue; }
     const isLong = a.direction === "LONG";
     const entry = candles[i].close;
     const risk = slMult * a.atr;
@@ -235,9 +293,10 @@ export function runBacktest(candles, style, inst) {
       const last = candles[j].close;
       r = (isLong ? last - entry : entry - last) / risk;
     }
-    trades.push({ pair: inst.pair, entryDate: candles[i].date, exitDate: candles[j].date, direction: a.direction, r, win: r > 0, score: a.composite, bars: j - i });
+    trades.push({ pair: inst.pair, entryDate: candles[i].date, exitDate: candles[j].date, direction: a.direction, r, win: r > 0, score: a.composite, adx: a.adx, bars: j - i });
     i = j + 1; // nächster Trade erst nach dem Schließen
   }
+  trades.skipped = skipped;
   return trades;
 }
 

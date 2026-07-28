@@ -7,11 +7,12 @@ import {
   TRADE_STYLES, storageGet, storageSet, storageHas, todayKey, sleep,
   analyzePair, fetchDaily, fetchLiveRatesRobust,
   cacheKeyFor, watchlistKeyFor, historyKeyFor, AV_QUOTA_KEY, TD_QUOTA_KEY, TD_DAILY_LIMIT,
+  ADX_WEAK, ADX_STRONG,
 } from "./engine.js";
 
 // ---------- Kleine UI-Bausteine ----------
 function ScoreBar({ label, value, tone }) {
-  const toneMap = { trend: "#5B8CFF", momentum: "#E0A458", vol: "#3DBB85" };
+  const toneMap = { trend: "#5B8CFF", momentum: "#E0A458", vol: "#3DBB85", regime: "#9085e9" };
   return (
     <div className="flex items-center gap-2">
       <span className="fsd-mono text-[10px] text-[#8C96A8] w-20 shrink-0 uppercase tracking-wide">{label}</span>
@@ -103,7 +104,17 @@ function TopPickCard({ result, rank, style, live, onLog }) {
         <ScoreBar label="Trend" value={result.trendScore} tone="trend" />
         <ScoreBar label="Momentum" value={result.momentumScore} tone="momentum" />
         <ScoreBar label="Volatilität" value={result.volScore} tone="vol" />
+        {result.adxScore != null && <ScoreBar label="Trendstärke" value={result.adxScore} tone="regime" />}
       </div>
+
+      {result.adx != null && result.adx < ADX_WEAK && (
+        <div className="flex items-start gap-1.5 bg-[#2A2113] border border-[#4D3B17] rounded-lg px-2.5 py-1.5">
+          <AlertTriangle size={12} color="#E3A94F" className="mt-0.5 shrink-0" />
+          <p className="text-[10px] text-[#D9B36A] leading-relaxed">
+            Schwacher Trend (ADX {result.adx.toFixed(0)}) — der Markt läuft eher seitwärts. Trendfolge-Setups sind hier fehleranfälliger.
+          </p>
+        </div>
+      )}
       <div className="text-[10px] text-[#7E8899] fsd-mono">CRV 1:{crv} · grob {minDays}–{maxDays} Handelstage · Stand {result.lastDate}</div>
       <button
         onClick={() => onLog({

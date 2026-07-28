@@ -54,6 +54,10 @@ export default function InfoPage({ styles }) {
             <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: "#3DBB85" }} />
             <span><strong>Volatilität (20 %):</strong> Die mittlere Tagesschwankung (ATR) sollte weder eingeschlafen noch hektisch sein — Ideal ist ein mittlerer Bereich (~0,6 % pro Tag).</span>
           </div>
+          <div className="flex items-center gap-2">
+            <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: "#9085e9" }} />
+            <span><strong>Trendstärke (ADX):</strong> Der so gebildete Wert fließt anschließend mit 20 % Gewicht ein. ADX misst, <em>ob überhaupt ein Trend vorliegt</em> (nicht dessen Richtung). Unter 20 gilt der Markt als seitwärts — Trendfolge-Setups werden dann abgewertet und die Karte zeigt eine Warnung.</span>
+          </div>
         </div>
         <p className="mt-1">
           Die drei besten Paare erscheinen als Karten, der Rest in der Rangliste darunter.

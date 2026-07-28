@@ -2,8 +2,8 @@ import { useState } from "react";
 import { FlaskConical, AlertTriangle, Info } from "lucide-react";
 import { Sparkline } from "./Charts.jsx";
 import {
-  TRADE_STYLES, storageGet, storageSet, sleep, todayKey,
-  fetchDailyFull, runBacktest, backtestCacheKey, AV_QUOTA_KEY, TD_QUOTA_KEY,
+  TRADE_STYLES, storageGet, storageSet, sleep,
+  fetchDailyFull, runBacktest, backtestCacheKey, AV_QUOTA_KEY, TD_QUOTA_KEY, ADX_WEAK,
 } from "./engine.js";
 
 function summarize(trades) {
@@ -13,6 +13,9 @@ function summarize(trades) {
   const totalR = rs.reduce((a, b) => a + b, 0);
   return { n, winRate: n ? (wins / n) * 100 : null, avgR: n ? totalR / n : null, totalR };
 }
+
+// Score-Schwelle für den Strategie-Vergleich (entspricht grob den Top-Vorschlägen).
+const MIN_SCORE = 70;
 
 const SCORE_BUCKETS = [
   { key: "85+", test: (s) => s >= 85 },
@@ -87,6 +90,11 @@ export default function Backtest({ market, avKey, tdKey, tradeStyle, selected })
     setError(""); setRunning(true); setResult(null);
 
     const allTrades = [];
+    const baselineTrades = [];   // jedes Signal, Score ohne Regime-Anteil
+    const adxTrades = [];        // nur ab ADX-Schwelle
+    const scoreTrades = [];      // nur ab Score-Schwelle
+    const bothTrades = [];       // beide Filter kombiniert
+    let skippedTotal = 0;
     const perInstrument = [];
     for (let idx = 0; idx < instruments.length; idx++) {
       const inst = instruments[idx];
@@ -107,6 +115,12 @@ export default function Backtest({ market, avKey, tdKey, tradeStyle, selected })
         const trades = runBacktest(candles, tradeStyle, inst);
         allTrades.push(...trades);
         perInstrument.push({ key: inst.pair, ...summarize(trades) });
+        baselineTrades.push(...runBacktest(candles, tradeStyle, inst, { useAdx: false }));
+        const adxOnly = runBacktest(candles, tradeStyle, inst, { minAdx: ADX_WEAK });
+        adxTrades.push(...adxOnly);
+        skippedTotal += adxOnly.skipped || 0;
+        scoreTrades.push(...runBacktest(candles, tradeStyle, inst, { minScore: MIN_SCORE }));
+        bothTrades.push(...runBacktest(candles, tradeStyle, inst, { minAdx: ADX_WEAK, minScore: MIN_SCORE }));
       } catch (e) {
         setError((p) => (p ? p + " · " : "") + e.message);
       }
@@ -123,7 +137,14 @@ export default function Backtest({ market, avKey, tdKey, tradeStyle, selected })
     let acc = 0;
     const equity = seq.map((t) => ({ date: t.exitDate, close: (acc += t.r) }));
 
-    setResult({ overall, byScore, perInstrument: perInstrument.sort((a, b) => b.n - a.n), equity, style: tradeStyle });
+    const variants = [
+      { key: "Jedes Signal (Basis)", ...summarize(baselineTrades) },
+      { key: `Nur bei Trendstärke ADX ≥ ${ADX_WEAK}`, ...summarize(adxTrades) },
+      { key: `Nur bei Score ≥ ${MIN_SCORE}`, ...summarize(scoreTrades) },
+      { key: `Score ≥ ${MIN_SCORE} + ADX ≥ ${ADX_WEAK}`, ...summarize(bothTrades) },
+    ];
+
+    setResult({ overall, byScore, perInstrument: perInstrument.sort((a, b) => b.n - a.n), equity, variants, skippedTotal, style: tradeStyle });
     setProgress("");
     setRunning(false);
   };
@@ -184,6 +205,12 @@ export default function Backtest({ market, avKey, tdKey, tradeStyle, selected })
               <Sparkline data={result.equity} dec={2} height={70} />
             </div>
           )}
+
+          <Table
+            title="Strategie-Vergleich (A/B)"
+            subtitle={`Dieselben Daten, vier Varianten — höherer Ø R = besser. Weniger Trades bei besserem Ø R bedeutet: der Filter sortiert die schlechten Signale aus. (ADX-Filter übersprang ${result.skippedTotal} Signal${result.skippedTotal === 1 ? "" : "e"}.)`}
+            rows={result.variants}
+          />
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <Table title="Nach Score-Klasse" subtitle="Steigt Trefferquote/Ø R mit dem Score, hat der Score Vorhersagewert." rows={result.byScore} />
