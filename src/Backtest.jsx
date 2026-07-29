@@ -4,6 +4,7 @@ import { Sparkline } from "./Charts.jsx";
 import {
   TRADE_STYLES, storageGet, storageSet, sleep,
   fetchDailyFull, runBacktest, backtestCacheKey, AV_QUOTA_KEY, TD_QUOTA_KEY, ADX_WEAK,
+  weekdayOf, WEEKDAY_NAMES,
 } from "./engine.js";
 
 function summarize(trades) {
@@ -144,7 +145,11 @@ export default function Backtest({ market, avKey, tdKey, tradeStyle, selected })
       { key: `Score ≥ ${MIN_SCORE} + ADX ≥ ${ADX_WEAK}`, ...summarize(bothTrades) },
     ];
 
-    setResult({ overall, byScore, perInstrument: perInstrument.sort((a, b) => b.n - a.n), equity, variants, skippedTotal, style: tradeStyle });
+    const byWeekday = [1, 2, 3, 4, 5, 0, 6]
+      .map((wd) => ({ key: WEEKDAY_NAMES[wd], ...summarize(allTrades.filter((t) => weekdayOf(t.entryDate) === wd)) }))
+      .filter((r) => r.n > 0);
+
+    setResult({ overall, byScore, perInstrument: perInstrument.sort((a, b) => b.n - a.n), byWeekday, equity, variants, skippedTotal, style: tradeStyle });
     setProgress("");
     setRunning(false);
   };
@@ -216,6 +221,8 @@ export default function Backtest({ market, avKey, tdKey, tradeStyle, selected })
             <Table title="Nach Score-Klasse" subtitle="Steigt Trefferquote/Ø R mit dem Score, hat der Score Vorhersagewert." rows={result.byScore} />
             <Table title="Nach Instrument" rows={result.perInstrument} />
           </div>
+
+          <Table title="Nach Einstiegs-Wochentag" subtitle="Nur aussagekräftig, wenn je Tag genügend Trades zusammenkommen." rows={result.byWeekday} />
 
           <div className="flex items-start gap-2 bg-[#2A2113] border border-[#4D3B17] rounded-lg px-3 py-2.5">
             <AlertTriangle size={14} color="#E3A94F" className="mt-0.5 shrink-0" />

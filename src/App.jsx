@@ -3,10 +3,11 @@ import { Settings2, Radio } from "lucide-react";
 import ScanView from "./ScanView.jsx";
 import InfoPage from "./InfoPage.jsx";
 import Journal from "./Journal.jsx";
+import HourAnalysis from "./HourAnalysis.jsx";
 import { MARKETS, TRADE_STYLES, storageGet, storageSet, pruneOldCaches } from "./engine.js";
 
 export default function TheDailyTrade() {
-  const [view, setView] = useState("forex"); // forex | metals | trades | info
+  const [view, setView] = useState("forex"); // forex | metals | trades | hours | info
   const [showSettings, setShowSettings] = useState(true);
   const [journalDraft, setJournalDraft] = useState(null);
   const [avKey, setAvKeyState] = useState(() => storageGet("fsd:apiKey") ?? "");
@@ -29,11 +30,13 @@ export default function TheDailyTrade() {
     ? "Regelbasierte Tages-Analyse"
     : view === "trades"
       ? "Handels-Journal & Auswertung"
-      : `Regelbasierte Tages-Analyse · ${activeMarket.subtitle}`;
+      : view === "hours"
+        ? "Handelszeiten-Analyse"
+        : `Regelbasierte Tages-Analyse · ${activeMarket.subtitle}`;
 
   const logTrade = (prefill) => { setJournalDraft(prefill); setView("trades"); };
 
-  const tabs = [["forex", "Forex"], ["metals", "Metalle"], ["trades", "Journal"], ["info", "Funktionsweise"]];
+  const tabs = [["forex", "Forex"], ["metals", "Metalle"], ["trades", "Journal"], ["hours", "Zeiten"], ["info", "Funktionsweise"]];
 
   return (
     <div className="fsd-root min-h-screen bg-[#0E1116] text-[#E8ECF2] pb-16">
@@ -58,12 +61,12 @@ export default function TheDailyTrade() {
           </button>
         </div>
         {/* Reiter-Navigation */}
-        <div className="max-w-5xl mx-auto px-4 flex gap-1">
+        <div className="max-w-5xl mx-auto px-4 flex gap-1 overflow-x-auto fsd-scrollbar">
           {tabs.map(([key, label]) => (
             <button
               key={key}
               onClick={() => setView(key)}
-              className="px-4 py-2 text-xs font-semibold -mb-px border-b-2 transition-colors"
+              className="px-3 sm:px-4 py-2 text-xs font-semibold -mb-px border-b-2 transition-colors whitespace-nowrap shrink-0"
               style={view === key
                 ? { borderColor: "#E0A458", color: "#E8ECF2" }
                 : { borderColor: "transparent", color: "#7E8899" }}
@@ -77,6 +80,7 @@ export default function TheDailyTrade() {
       <div className="max-w-5xl mx-auto px-4">
         {view === "info" && <InfoPage styles={TRADE_STYLES} />}
         {view === "trades" && <Journal draft={journalDraft} clearDraft={() => setJournalDraft(null)} />}
+        {view === "hours" && <HourAnalysis tdKey={tdKey} />}
         {isScan && (
           <ScanView
             key={activeMarket.id}

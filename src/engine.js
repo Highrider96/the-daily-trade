@@ -29,6 +29,7 @@ export function pruneOldCaches() {
       const k = localStorage.key(i);
       if (!k || !k.startsWith("fsd:")) continue;
       const dated = k.includes(":cache:") || k.includes(":bt:") || k.startsWith("fsd:quota:") || k.startsWith("fsd:tdquota:");
+      // (fsd:hours:cache:… fällt unter ":cache:")
       if (dated && !k.endsWith(today)) stale.push(k);
     }
     stale.forEach((k) => localStorage.removeItem(k));
@@ -389,6 +390,97 @@ async function fetchTDDailyFull(inst, tdKey) {
   return data.values.map((v) => ({
     date: v.datetime, open: parseFloat(v.open), high: parseFloat(v.high), low: parseFloat(v.low), close: parseFloat(v.close),
   })).reverse();
+}
+
+// ---------- Stundendaten (Handelszeiten-Analyse) ----------
+export const HOURLY_BARS = 5000; // ~7 Monate à 24h × 5 Tage
+
+// Stundenkerzen in deutscher Zeit (Twelve Data liefert die Zeitzone direkt).
+export async function fetchHourly(inst, tdKey) {
+  const url = `https://api.twelvedata.com/time_series?symbol=${encodeURIComponent(inst.pair)}&interval=1h&outputsize=${HOURLY_BARS}&timezone=Europe/Berlin&apikey=${tdKey}`;
+  let res;
+  try { res = await fetch(url); } catch { throw new Error(`Verbindung zu Twelve Data fehlgeschlagen (${inst.pair}).`); }
+  if (!res.ok) throw new Error(`Twelve-Data-HTTP-Fehler (${res.status}) bei ${inst.pair}.`);
+  const data = await res.json();
+  if (data.status === "error") throw new Error(`Twelve Data (${inst.pair}): ` + (data.message || "Fehler"));
+  if (!data.values || !data.values.length) throw new Error(`Keine Stundendaten für ${inst.pair}.`);
+  return data.values.map((v) => ({
+    date: v.datetime,
+    open: parseFloat(v.open), high: parseFloat(v.high), low: parseFloat(v.low), close: parseFloat(v.close),
+  })).reverse();
+}
+
+// "2026-07-29 21:00:00" → 21 (Stunde in deutscher Zeit)
+export const hourOf = (s) => parseInt(s.slice(11, 13), 10);
+// Wochentag deterministisch aus dem Datumsteil (0 = So … 6 = Sa)
+export function weekdayOf(s) {
+  const [y, m, d] = s.slice(0, 10).split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+}
+export const WEEKDAY_NAMES = ["Sonntag", "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag"];
+
+// Bewegungsprofil: durchschnittliche Kerzen-Spanne je Tagesstunde (in % des Kurses).
+export function hourProfile(candles) {
+  const sum = new Array(24).fill(0), cnt = new Array(24).fill(0);
+  for (const c of candles) {
+    const h = hourOf(c.date);
+    if (!(c.close > 0)) continue;
+    sum[h] += ((c.high - c.low) / c.close) * 100;
+    cnt[h]++;
+  }
+  return sum.map((s, h) => ({ hour: h, avgRangePct: cnt[h] ? s / cnt[h] : null, n: cnt[h] }));
+}
+
+// Walk-Forward-Test auf Stundenkerzen: Einstieg in Richtung des kurzfristigen
+// Stundentrends (SMA20 vs SMA50), Stop 1× / Ziel 1,5× Stunden-ATR, max. 24h
+// Haltedauer. Liefert je Trade die Einstiegsstunde — daraus entsteht das
+// Ranking "beste Handelszeit".
+export function runHourlyBacktest(candles, inst) {
+  const slMult = 1.0, tpMult = 1.5, maxHold = 24, warmup = 55;
+  const trades = [];
+  const closes = candles.map((c) => c.close);
+  const avg = (arr) => arr.reduce((a, b) => a + b, 0) / arr.length;
+
+  let i = warmup;
+  while (i < candles.length - 1) {
+    const sma20 = avg(closes.slice(i - 19, i + 1));
+    const sma50 = avg(closes.slice(i - 49, i + 1));
+    // ATR über die letzten 14 Stunden
+    let tr = 0;
+    for (let k = i - 13; k <= i; k++) {
+      const c = candles[k], p = candles[k - 1];
+      tr += Math.max(c.high - c.low, Math.abs(c.high - p.close), Math.abs(c.low - p.close));
+    }
+    const atr = tr / 14;
+    if (!(atr > 0)) { i++; continue; }
+
+    const isLong = sma20 >= sma50;
+    const entry = candles[i].close;
+    const risk = slMult * atr;
+    const stop = isLong ? entry - risk : entry + risk;
+    const target = isLong ? entry + tpMult * atr : entry - tpMult * atr;
+
+    let j = i + 1, outcome = null;
+    const limit = Math.min(candles.length - 1, i + maxHold);
+    for (; j <= limit; j++) {
+      const c = candles[j];
+      if (isLong) {
+        if (c.low <= stop) { outcome = "loss"; break; }
+        if (c.high >= target) { outcome = "win"; break; }
+      } else {
+        if (c.high >= stop) { outcome = "loss"; break; }
+        if (c.low <= target) { outcome = "win"; break; }
+      }
+    }
+    let r;
+    if (outcome === "win") r = tpMult;
+    else if (outcome === "loss") r = -1;
+    else { j = Math.min(j, candles.length - 1); r = ((isLong ? candles[j].close - entry : entry - candles[j].close) / risk); }
+
+    trades.push({ pair: inst.pair, hour: hourOf(candles[i].date), weekday: weekdayOf(candles[i].date), r, win: r > 0 });
+    i = j + 1; // nicht überlappend
+  }
+  return trades;
 }
 
 export async function fetchDailyFull(inst, market, keys) {
