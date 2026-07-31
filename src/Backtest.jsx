@@ -2,8 +2,8 @@ import { useState } from "react";
 import { FlaskConical, AlertTriangle, Info } from "lucide-react";
 import { Sparkline } from "./Charts.jsx";
 import {
-  TRADE_STYLES, storageGet, storageSet, sleep,
-  fetchDailyFull, runBacktest, backtestCacheKey, AV_QUOTA_KEY, TD_QUOTA_KEY, ADX_WEAK,
+  TRADE_STYLES, INTERVALS, storageGet, storageSet, sleep, getSpread,
+  fetchBacktestSeries, runBacktest, backtestCacheKey, TD_QUOTA_KEY, ADX_WEAK,
   weekdayOf, WEEKDAY_NAMES,
 } from "./engine.js";
 
@@ -70,42 +70,43 @@ function Table({ title, subtitle, rows }) {
   );
 }
 
-export default function Backtest({ market, avKey, tdKey, tradeStyle, selected }) {
+export default function Backtest({ market, tdKey, tradeStyle, selected, interval }) {
   const [running, setRunning] = useState(false);
   const [progress, setProgress] = useState("");
   const [error, setError] = useState("");
   const [result, setResult] = useState(null);
 
-  const provider = market.provider;
+  const iv = INTERVALS[interval];
   const instruments = market.universe.filter((u) => selected.includes(u.pair));
 
   const bump = () => {
-    const key = provider === "av" ? AV_QUOTA_KEY() : TD_QUOTA_KEY();
+    const key = TD_QUOTA_KEY();
     storageSet(key, (storageGet(key) ?? 0) + 1);
   };
 
   const run = async () => {
-    if (provider === "av" && !avKey) { setError("Für den Forex-Backtest bitte einen Alpha-Vantage-Key in den Einstellungen eintragen."); return; }
-    if (provider === "td" && !tdKey) { setError("Für den Metalle-Backtest bitte einen Twelve-Data-Key in den Einstellungen eintragen."); return; }
+    if (!tdKey) { setError("Für den Backtest bitte einen Twelve-Data-Key in den Einstellungen eintragen."); return; }
     if (instruments.length === 0) { setError("Bitte mindestens ein Instrument in der Watchlist wählen."); return; }
     setError(""); setRunning(true); setResult(null);
 
     const allTrades = [];
-    const baselineTrades = [];   // jedes Signal, Score ohne Regime-Anteil
+    const noCostTrades = [];     // ohne Handelskosten (zum Vergleich)
+    const baselineTrades = [];   // jedes Signal, Score ohne Regime-/HTF-Anteil
     const adxTrades = [];        // nur ab ADX-Schwelle
+    const htfTrades = [];        // nur mit übergeordnetem Trend
     const scoreTrades = [];      // nur ab Score-Schwelle
-    const bothTrades = [];       // beide Filter kombiniert
+    const bothTrades = [];       // Score-Schwelle + übergeordneter Trend
     let skippedTotal = 0;
     const perInstrument = [];
     for (let idx = 0; idx < instruments.length; idx++) {
       const inst = instruments[idx];
       setProgress(`${inst.pair} (${idx + 1}/${instruments.length})…`);
       try {
-        const ck = backtestCacheKey(market, inst.pair);
+        const ck = backtestCacheKey(market, inst.pair, interval);
         let candles = storageGet(ck);
         if (!candles) {
           bump();
-          candles = await fetchDailyFull(inst, market, { avKey, tdKey });
+          candles = await fetchBacktestSeries(inst, interval, tdKey);
           storageSet(ck, candles);
           if (idx < instruments.length - 1) {
             setProgress(`${inst.pair} geladen. Warte auf Rate-Limit…`);
@@ -113,15 +114,19 @@ export default function Backtest({ market, avKey, tdKey, tradeStyle, selected })
           }
         }
         if (candles.length < 80) { setError((p) => (p ? p + " · " : "") + `${inst.pair}: zu wenig Historie`); continue; }
-        const trades = runBacktest(candles, tradeStyle, inst);
+        const spread = getSpread(inst.pair);
+        const base = { spread, volIdeal: iv.volIdeal };
+        const trades = runBacktest(candles, tradeStyle, inst, base);
         allTrades.push(...trades);
         perInstrument.push({ key: inst.pair, ...summarize(trades) });
-        baselineTrades.push(...runBacktest(candles, tradeStyle, inst, { useAdx: false }));
-        const adxOnly = runBacktest(candles, tradeStyle, inst, { minAdx: ADX_WEAK });
+        noCostTrades.push(...runBacktest(candles, tradeStyle, inst, { volIdeal: iv.volIdeal }));
+        baselineTrades.push(...runBacktest(candles, tradeStyle, inst, { ...base, useAdx: false, useHtf: false }));
+        const adxOnly = runBacktest(candles, tradeStyle, inst, { ...base, minAdx: ADX_WEAK });
         adxTrades.push(...adxOnly);
         skippedTotal += adxOnly.skipped || 0;
-        scoreTrades.push(...runBacktest(candles, tradeStyle, inst, { minScore: MIN_SCORE }));
-        bothTrades.push(...runBacktest(candles, tradeStyle, inst, { minAdx: ADX_WEAK, minScore: MIN_SCORE }));
+        htfTrades.push(...runBacktest(candles, tradeStyle, inst, { ...base, htfOnly: true }));
+        scoreTrades.push(...runBacktest(candles, tradeStyle, inst, { ...base, minScore: MIN_SCORE }));
+        bothTrades.push(...runBacktest(candles, tradeStyle, inst, { ...base, minScore: MIN_SCORE, htfOnly: true }));
       } catch (e) {
         setError((p) => (p ? p + " · " : "") + e.message);
       }
@@ -139,10 +144,12 @@ export default function Backtest({ market, avKey, tdKey, tradeStyle, selected })
     const equity = seq.map((t) => ({ date: t.exitDate, close: (acc += t.r) }));
 
     const variants = [
-      { key: "Jedes Signal (Basis)", ...summarize(baselineTrades) },
+      { key: "Ohne Kosten (theoretisch)", ...summarize(noCostTrades) },
+      { key: "Jedes Signal, mit Kosten", ...summarize(baselineTrades) },
       { key: `Nur bei Trendstärke ADX ≥ ${ADX_WEAK}`, ...summarize(adxTrades) },
+      { key: "Nur mit übergeordnetem Trend", ...summarize(htfTrades) },
       { key: `Nur bei Score ≥ ${MIN_SCORE}`, ...summarize(scoreTrades) },
-      { key: `Score ≥ ${MIN_SCORE} + ADX ≥ ${ADX_WEAK}`, ...summarize(bothTrades) },
+      { key: `Score ≥ ${MIN_SCORE} + übergeordneter Trend`, ...summarize(bothTrades) },
     ];
 
     const byWeekday = [1, 2, 3, 4, 5, 0, 6]
@@ -165,7 +172,7 @@ export default function Backtest({ market, avKey, tdKey, tradeStyle, selected })
               <FlaskConical size={15} color="#E0A458" /> Historischer Backtest
             </h3>
             <p className="text-[11px] text-[#7E8899] mt-1 max-w-xl leading-relaxed">
-              Simuliert die aktuelle Strategie (Horizont: <strong>{TRADE_STYLES[tradeStyle].label}</strong>) über die vergangenen ~800 Tageskerzen deiner Watchlist — ohne Zukunfts-Blick. Lädt dafür einmal pro Tag die volle Historie ({instruments.length} Instrument{instruments.length === 1 ? "" : "e"} = {instruments.length} API-Anfrage{instruments.length === 1 ? "" : "n"}).
+              Simuliert die aktuelle Strategie (Horizont: <strong>{TRADE_STYLES[tradeStyle].label}</strong>, Zeitrahmen: <strong>{iv.label}</strong>) über die vergangenen ~{iv.btBars.toLocaleString("de-DE")} Kerzen deiner Watchlist — ohne Zukunfts-Blick und <strong>inklusive Spread-Kosten</strong>. Lädt dafür einmal pro Tag die Historie ({instruments.length} Instrument{instruments.length === 1 ? "" : "e"} = {instruments.length} API-Anfrage{instruments.length === 1 ? "" : "n"}).
             </p>
           </div>
           <button
@@ -227,7 +234,7 @@ export default function Backtest({ market, avKey, tdKey, tradeStyle, selected })
           <div className="flex items-start gap-2 bg-[#2A2113] border border-[#4D3B17] rounded-lg px-3 py-2.5">
             <AlertTriangle size={14} color="#E3A94F" className="mt-0.5 shrink-0" />
             <p className="text-[11px] text-[#D9B36A] leading-relaxed">
-              Wichtig: Der Backtest ignoriert <strong>Spread, Slippage und Gebühren</strong> (gerade bei Scalping stark verzerrend), nutzt nur Tageskerzen und ein begrenztes Zeitfenster. <strong>Vergangene Ergebnisse sind keine Garantie für die Zukunft.</strong> Der Wert liegt im Vergleich — ob eine Änderung die Kennzahlen verbessert —, nicht in der absoluten Zahl.
+              Wichtig: Der Spread ist eingerechnet (Einstellungen), <strong>Slippage, Swap und Gebühren</strong> jedoch nicht — die reale Rechnung ist also noch etwas schlechter. Die Simulation nutzt Schlusskurse und ein begrenztes Zeitfenster. <strong>Vergangene Ergebnisse sind keine Garantie für die Zukunft.</strong> Der Wert liegt im Vergleich — ob eine Änderung die Kennzahlen verbessert —, nicht in der absoluten Zahl.
             </p>
           </div>
         </>

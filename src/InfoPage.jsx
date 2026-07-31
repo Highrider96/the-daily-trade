@@ -27,10 +27,11 @@ export default function InfoPage({ styles }) {
 
       <Section icon={Database} iconColor="#5B8CFF" title="Woher kommen die Daten?">
         <p>
-          Kursdaten (Tageskerzen der letzten ~100 Handelstage) liefert im <strong>Forex</strong>-Reiter
-          <strong> Alpha Vantage</strong> (kostenlos, 25 Anfragen/Tag), im <strong>Metalle</strong>-Reiter
-          <strong> Twelve Data</strong> (kostenlos, 800 Anfragen/Tag). Deshalb merkt sich die App einmal
-          geladene Kurse für den Rest des Tages und zeigt dir einen Zähler der verbleibenden Anfragen.
+          Alle Kursdaten kommen von <strong>Twelve Data</strong> (kostenlos, 800 Anfragen/Tag) — ein Key
+          für Forex, Metalle, Live-Kurse und Handelszeiten. Der <strong>Zeitrahmen</strong> ist in den
+          Einstellungen wählbar: <strong>1 Stunde</strong> (schnell, für kurze Trades), <strong>4 Stunden</strong>
+          oder <strong>1 Tag</strong> (ruhig, für Swing). Einmal geladene Kurse merkt sich die App für den
+          Rest des Tages; ein Zähler zeigt die verbleibenden Anfragen.
         </p>
         <p>
           Optional holt der Button <strong>„Live-Kurse holen"</strong> über einen zweiten kostenlosen
@@ -57,6 +58,10 @@ export default function InfoPage({ styles }) {
           <div className="flex items-center gap-2">
             <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: "#9085e9" }} />
             <span><strong>Trendstärke (ADX):</strong> Der so gebildete Wert fließt anschließend mit 20 % Gewicht ein. ADX misst, <em>ob überhaupt ein Trend vorliegt</em> (nicht dessen Richtung). Unter 20 gilt der Markt als seitwärts — Trendfolge-Setups werden dann abgewertet und die Karte zeigt eine Warnung.</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: "#8C96A8" }} />
+            <span><strong>Übergeordneter Trend:</strong> Zuletzt fließt mit 15 % ein, ob das Signal zum großen Bild passt (Kurs über oder unter dem 200-Perioden-Durchschnitt). Ein Setup gegen die große Strömung wird abgewertet; die Karte zeigt „bestätigt" oder „gegenläufig".</span>
           </div>
         </div>
         <p className="mt-1">
@@ -93,9 +98,11 @@ export default function InfoPage({ styles }) {
           </table>
         </div>
         <p>
-          Die Karten zeigen zusätzlich die Distanz in Pips und das Chance-Risiko-Verhältnis (CRV).
-          Beim Scalping-Horizont gilt: Basis bleiben Tageskerzen — sehr enge Level bedeuten, dass
-          Spread und Slippage stärker ins Gewicht fallen.
+          Die Karten zeigen zusätzlich die Distanz in Pips, das Chance-Risiko-Verhältnis (CRV) und die
+          <strong> Handelskosten</strong> — also welchen Anteil des Zielgewinns der Spread auffrisst
+          (den typischen Spread deines Brokers hinterlegst du in den Einstellungen). Wichtig: Liegt das
+          Ziel <em>enger als eine typische Kerze</em> des gewählten Zeitrahmens, entscheiden zufällige
+          Schwankungen über den Ausgang — dann besser einen kürzeren Zeitrahmen wählen.
         </p>
       </Section>
 

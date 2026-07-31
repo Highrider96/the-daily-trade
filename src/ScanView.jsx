@@ -1,13 +1,13 @@
 import { useState, useEffect } from "react";
-import { RefreshCw, TrendingUp, TrendingDown, AlertTriangle, Info, X, ChevronRight, Radio, History, Zap, BookOpen } from "lucide-react";
+import { RefreshCw, TrendingUp, TrendingDown, AlertTriangle, Info, X, ChevronRight, Radio, History, Zap, BookOpen, Bell } from "lucide-react";
 import { Sparkline, ScoreHistoryChart } from "./Charts.jsx";
 import DataSync from "./DataSync.jsx";
 import Backtest from "./Backtest.jsx";
 import {
-  TRADE_STYLES, storageGet, storageSet, storageHas, todayKey, sleep,
-  analyzePair, fetchDaily, fetchLiveRatesRobust,
-  cacheKeyFor, watchlistKeyFor, historyKeyFor, AV_QUOTA_KEY, TD_QUOTA_KEY, TD_DAILY_LIMIT,
-  ADX_WEAK, ADX_STRONG,
+  TRADE_STYLES, INTERVALS, storageGet, storageSet, storageHas, todayKey, sleep,
+  analyzePair, fetchScanSeries, fetchLiveRatesRobust, getSpread, SPREADS_KEY,
+  cacheKeyFor, watchlistKeyFor, historyKeyFor, TD_QUOTA_KEY, TD_DAILY_LIMIT,
+  ADX_WEAK,
 } from "./engine.js";
 
 // ---------- Kleine UI-Bausteine ----------
@@ -44,7 +44,7 @@ function ConvictionDial({ score, direction }) {
   );
 }
 
-function TopPickCard({ result, rank, style, live, onLog }) {
+function TopPickCard({ result, rank, style, live, onLog, interval }) {
   const isLong = result.direction === "LONG";
   const color = isLong ? "#3DBB85" : "#E5695A";
   const dec = result.dec;
@@ -57,8 +57,15 @@ function TopPickCard({ result, rank, style, live, onLog }) {
   const slDist = fmtDist(slMult * result.atr);
   const tpDist = fmtDist(tpMult * result.atr);
   const crv = (tpMult / slMult).toFixed(2).replace(".", ",");
+  const unit = INTERVALS[interval].unit;
   const minDays = Math.max(1, Math.ceil(tpMult));
   const maxDays = Math.ceil(tpMult * 3);
+
+  // Handelskosten: ein voller Spread je Trade, gemessen am Zielgewinn.
+  const spread = getSpread(result.pair);
+  const targetDist = tpMult * result.atr;
+  const costPct = targetDist > 0 ? (spread / targetDist) * 100 : 0;
+  const costHigh = costPct >= 15;
   return (
     <div className="bg-[#161B22] border border-[#2A3341] rounded-xl p-5 flex flex-col gap-4 relative overflow-hidden">
       <div className="absolute top-0 left-0 text-[10px] fsd-mono text-[#6F7A8C] px-3 py-1 border-r border-b border-[#2A3341] rounded-br-lg">
@@ -107,6 +114,20 @@ function TopPickCard({ result, rank, style, live, onLog }) {
         {result.adxScore != null && <ScoreBar label="Trendstärke" value={result.adxScore} tone="regime" />}
       </div>
 
+      {/* Übergeordneter Trend + Handelskosten */}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] fsd-mono">
+        {result.htfAligned != null && (
+          <span style={{ color: result.htfAligned ? "#47C08D" : "#E3A94F" }}>
+            {result.htfAligned ? "✓" : "✗"} {INTERVALS[interval].htfLabel} {result.htfAligned ? "bestätigt" : "gegenläufig"}
+          </span>
+        )}
+        {spread > 0 && (
+          <span style={{ color: costHigh ? "#E3A94F" : "#7E8899" }}>
+            Kosten ≈ {result.pip ? `${(spread / result.pip).toFixed(1)} Pips` : `${spread.toFixed(2)} $`} ({costPct.toFixed(0)} % vom Ziel)
+          </span>
+        )}
+      </div>
+
       {result.adx != null && result.adx < ADX_WEAK && (
         <div className="flex items-start gap-1.5 bg-[#2A2113] border border-[#4D3B17] rounded-lg px-2.5 py-1.5">
           <AlertTriangle size={12} color="#E3A94F" className="mt-0.5 shrink-0" />
@@ -115,7 +136,16 @@ function TopPickCard({ result, rank, style, live, onLog }) {
           </p>
         </div>
       )}
-      <div className="text-[10px] text-[#7E8899] fsd-mono">CRV 1:{crv} · grob {minDays}–{maxDays} Handelstage · Stand {result.lastDate}</div>
+
+      {costHigh && (
+        <div className="flex items-start gap-1.5 bg-[#2A2113] border border-[#4D3B17] rounded-lg px-2.5 py-1.5">
+          <AlertTriangle size={12} color="#E3A94F" className="mt-0.5 shrink-0" />
+          <p className="text-[10px] text-[#D9B36A] leading-relaxed">
+            Hohe Kostenquote: Der Spread frisst rund {costPct.toFixed(0)} % des Zielgewinns. Ein weiterer Horizont oder ein günstigeres Instrument verbessert das Verhältnis deutlich.
+          </p>
+        </div>
+      )}
+      <div className="text-[10px] text-[#7E8899] fsd-mono">CRV 1:{crv} · grob {minDays}–{maxDays} {unit} · Stand {result.lastDate}</div>
       <button
         onClick={() => onLog({
           instrument: result.pair,
@@ -134,10 +164,64 @@ function TopPickCard({ result, rank, style, live, onLog }) {
   );
 }
 
+// ---------- Handelskosten je Instrument ----------
+function SpreadSettings({ universe }) {
+  const [open, setOpen] = useState(false);
+  const [spreads, setSpreads] = useState(() => storageGet(SPREADS_KEY) || {});
+
+  const setVal = (pair, txt) => {
+    const next = { ...spreads };
+    const num = parseFloat(String(txt).replace(",", "."));
+    if (txt === "" || !Number.isFinite(num)) delete next[pair]; else next[pair] = num;
+    setSpreads(next);
+    storageSet(SPREADS_KEY, next);
+  };
+
+  return (
+    <div className="mb-4">
+      <button onClick={() => setOpen((o) => !o)} className="text-xs text-[#8C96A8] hover:text-[#B7C0CE] flex items-center gap-1">
+        Handelskosten (Spread) je Instrument {open ? "▾" : "▸"}
+      </button>
+      {open && (
+        <div className="mt-2">
+          <p className="text-[10px] text-[#7E8899] mb-2 leading-relaxed">
+            Typischer Spread deines Brokers — fließt in Backtest und Kostenwarnung ein. Angabe in <strong>Pips</strong> (Forex) bzw. Preis-Einheiten (Metalle). Leer lassen = Standardwert.
+          </p>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
+            {universe.map((u) => {
+              const stored = spreads[u.pair];
+              const shown = stored != null ? (u.pip ? stored / u.pip : stored) : "";
+              const def = getSpread(u.pair);
+              return (
+                <div key={u.pair}>
+                  <label className="text-[9px] text-[#8C96A8] block mb-0.5 fsd-mono">{u.pair}</label>
+                  <input
+                    value={shown}
+                    inputMode="decimal"
+                    placeholder={String(u.pip ? +(def / u.pip).toFixed(1) : def)}
+                    onChange={(e) => {
+                      const raw = e.target.value;
+                      if (raw === "") { setVal(u.pair, ""); return; }
+                      const num = parseFloat(raw.replace(",", "."));
+                      if (!Number.isFinite(num)) return;
+                      setVal(u.pair, u.pip ? num * u.pip : num);
+                    }}
+                    className="w-full bg-[#1C232D] border border-[#2A3341] rounded px-2 py-1 text-xs fsd-mono outline-none focus:border-[#5B8CFF]"
+                  />
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ---------- Wiederverwendbare Scan-Ansicht (Forex / Metalle / …) ----------
-export default function ScanView({ market, avKey, setAvKey, tdKey, setTdKey, tradeStyle, setTradeStyle, showSettings, setShowSettings, onLogTrade }) {
+export default function ScanView({ market, tdKey, setTdKey, tradeStyle, setTradeStyle, interval, setInterval, showSettings, setShowSettings, onLogTrade }) {
   const uni = market.universe;
-  const provider = market.provider;
+  const iv = INTERVALS[interval];
 
   const [selected, setSelected] = useState(() => storageGet(watchlistKeyFor(market)) ?? market.defaultSelected);
   const [analyzing, setAnalyzing] = useState(false);
@@ -145,16 +229,15 @@ export default function ScanView({ market, avKey, setAvKey, tdKey, setTdKey, tra
   const [results, setResults] = useState([]);
   const [error, setError] = useState("");
   const [lastRun, setLastRun] = useState(null);
-  const [history, setHistory] = useState(() => storageGet(historyKeyFor(market)) ?? []);
+  const [history, setHistory] = useState(() => storageGet(historyKeyFor(market, interval)) ?? []);
   const [liveRates, setLiveRates] = useState({});
   const [liveUpdating, setLiveUpdating] = useState(false);
-  const [avUsed, setAvUsed] = useState(() => storageGet(AV_QUOTA_KEY()) ?? 0);
   const [tdUsed, setTdUsed] = useState(() => storageGet(TD_QUOTA_KEY()) ?? 0);
+  const [briefing, setBriefing] = useState(null);
 
-  const quotaUsed = provider === "av" ? avUsed : tdUsed;
-  const quotaLimit = market.dailyLimit;
+  const quotaUsed = tdUsed;
+  const quotaLimit = TD_DAILY_LIMIT;
 
-  const bumpAv = () => { const n = (storageGet(AV_QUOTA_KEY()) ?? 0) + 1; storageSet(AV_QUOTA_KEY(), n); setAvUsed(n); };
   const bumpTd = (k) => { const n = (storageGet(TD_QUOTA_KEY()) ?? 0) + k; storageSet(TD_QUOTA_KEY(), n); setTdUsed(n); };
 
   const toggleSymbol = (pair) => {
@@ -168,8 +251,7 @@ export default function ScanView({ market, avKey, setAvKey, tdKey, setTdKey, tra
   const runAnalysis = async (opts = {}) => {
     const cacheOnly = opts.cacheOnly;
     if (!cacheOnly) {
-      if (provider === "av" && !avKey) { setError("Bitte zuerst einen Alpha-Vantage-API-Key eintragen."); return; }
-      if (provider === "td" && !tdKey) { setError("Bitte zuerst einen Twelve-Data-API-Key eintragen."); setShowSettings(true); return; }
+      if (!tdKey) { setError("Bitte zuerst einen Twelve-Data-API-Key eintragen."); setShowSettings(true); return; }
       if (selected.length === 0) { setError("Bitte mindestens ein Instrument auswählen."); return; }
       setError("");
       setAnalyzing(true);
@@ -183,13 +265,13 @@ export default function ScanView({ market, avKey, setAvKey, tdKey, setTdKey, tra
       const inst = instruments[i];
       if (!cacheOnly) setProgressMsg(`Analysiere ${inst.pair} (${i + 1}/${instruments.length})...`);
       try {
-        const ck = cacheKeyFor(market, inst.pair);
+        const ck = cacheKeyFor(market, inst.pair, interval);
         let candles = storageGet(ck);
 
         if (!candles) {
           if (cacheOnly) continue; // im Cache-Modus nichts nachladen
-          if (provider === "av") bumpAv(); else bumpTd(1);
-          candles = await fetchDaily(inst, market, { avKey, tdKey });
+          bumpTd(1);
+          candles = await fetchScanSeries(inst, interval, tdKey);
           storageSet(ck, candles);
           if (i < instruments.length - 1) {
             setProgressMsg(`${inst.pair} geladen. Warte auf Rate-Limit (${instruments.length - i - 1} verbleibend)...`);
@@ -197,7 +279,7 @@ export default function ScanView({ market, avKey, setAvKey, tdKey, setTdKey, tra
           }
         }
         if (candles.length < 26) throw new Error(`Zu wenig Historie für ${inst.pair}`);
-        collected.push(analyzePair(candles, inst));
+        collected.push(analyzePair(candles, inst, { volIdeal: iv.volIdeal }));
       } catch (e) {
         if (!cacheOnly) setError((prev) => (prev ? prev + " · " + e.message : e.message));
       }
@@ -206,6 +288,23 @@ export default function ScanView({ market, avKey, setAvKey, tdKey, setTdKey, tra
     collected.sort((a, b) => b.composite - a.composite);
     if (cacheOnly && collected.length === 0) return; // nichts im Cache → Empty-State behalten
     setResults(collected);
+
+    // Briefing: Was hat sich gegenüber dem letzten gespeicherten Scan geändert?
+    const prev = [...history].filter((h) => h.date !== todayKey()).sort((a, b) => a.date.localeCompare(b.date)).pop();
+    if (prev) {
+      const neu = [], gedreht = [], gesprungen = [];
+      collected.forEach((r) => {
+        const before = prev.scores[r.pair];
+        if (!before) { neu.push({ pair: r.pair, d: r.direction, c: r.composite }); return; }
+        if (before.d !== r.direction) gedreht.push({ pair: r.pair, von: before.d, zu: r.direction, c: r.composite });
+        const diff = r.composite - before.c;
+        if (Math.abs(diff) >= 15) gesprungen.push({ pair: r.pair, diff, c: r.composite });
+      });
+      setBriefing((neu.length || gedreht.length || gesprungen.length)
+        ? { seit: prev.date, neu, gedreht, gesprungen: gesprungen.sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff)) }
+        : { seit: prev.date, neu: [], gedreht: [], gesprungen: [] });
+    }
+
     if (collected.length > 0 && !cacheOnly) {
       const entry = {
         date: todayKey(),
@@ -215,7 +314,7 @@ export default function ScanView({ market, avKey, setAvKey, tdKey, setTdKey, tra
         .sort((a, b) => a.date.localeCompare(b.date))
         .slice(-90);
       setHistory(nextHistory);
-      storageSet(historyKeyFor(market), nextHistory);
+      storageSet(historyKeyFor(market, interval), nextHistory);
     }
     if (!cacheOnly) {
       setLastRun(new Date());
@@ -261,7 +360,7 @@ export default function ScanView({ market, avKey, setAvKey, tdKey, setTdKey, tra
       <div className="mt-4 flex items-start gap-2 bg-[#2A2113] border border-[#4D3B17] rounded-lg px-3 py-2.5">
         <AlertTriangle size={14} color="#E3A94F" className="mt-0.5 shrink-0" />
         <p className="text-[11px] text-[#D9B36A] leading-relaxed">
-          Bildungs-Werkzeug auf Basis technischer Indikatoren ({market.dataNote}). Keine Anlageberatung und keine Ausführungsgarantie. Trading birgt Verlustrisiko — triff Entscheidungen eigenverantwortlich.
+          Bildungs-Werkzeug auf Basis technischer Indikatoren (kostenlose Twelve-Data-Daten, Zeitrahmen {iv.label}). Keine Anlageberatung und keine Ausführungsgarantie. Trading birgt Verlustrisiko — triff Entscheidungen eigenverantwortlich.
         </p>
       </div>
 
@@ -273,35 +372,41 @@ export default function ScanView({ market, avKey, setAvKey, tdKey, setTdKey, tra
             <button onClick={() => setShowSettings(false)}><X size={16} color="#7E8899" /></button>
           </div>
 
-          {provider === "av" && (
-            <>
-              <label className="text-xs text-[#8C96A8] block mb-1.5">Alpha Vantage API-Key (Forex-Datenquelle)</label>
-              <input
-                type="password"
-                value={avKey}
-                onChange={(e) => setAvKey(e.target.value)}
-                placeholder="Dein kostenloser API-Key"
-                className="w-full bg-[#1C232D] border border-[#2A3341] rounded-lg px-3 py-2 text-sm fsd-mono outline-none focus:border-[#5B8CFF] mb-1"
-              />
-              <a href="https://www.alphavantage.co/support/#api-key" target="_blank" rel="noopener noreferrer" className="text-[11px] text-[#5B8CFF] hover:underline flex items-center gap-0.5 mb-4">
-                Kostenlosen Key holen <ChevronRight size={12} />
-              </a>
-            </>
-          )}
-
-          <label className="text-xs text-[#8C96A8] block mb-1.5">
-            Twelve Data API-Key {provider === "td" ? "(Datenquelle & Live-Kurse)" : "(optional — für Live-Kurse)"}
-          </label>
+          <label className="text-xs text-[#8C96A8] block mb-1.5">Twelve Data API-Key (Datenquelle &amp; Live-Kurse)</label>
           <input
             type="password"
             value={tdKey}
             onChange={(e) => setTdKey(e.target.value)}
-            placeholder={provider === "td" ? "Erforderlich für Metalle" : "Optionaler zweiter Key für Live-Entries"}
+            placeholder="Dein kostenloser API-Key"
             className="w-full bg-[#1C232D] border border-[#2A3341] rounded-lg px-3 py-2 text-sm fsd-mono outline-none focus:border-[#5B8CFF] mb-1"
           />
           <a href="https://twelvedata.com/register" target="_blank" rel="noopener noreferrer" className="text-[11px] text-[#5B8CFF] hover:underline flex items-center gap-0.5 mb-4">
             Kostenlosen Key holen (800 Anfragen/Tag) <ChevronRight size={12} />
           </a>
+
+          <label className="text-xs text-[#8C96A8] block mb-2">Zeitrahmen (Basis der Analyse)</label>
+          <div className="grid grid-cols-3 gap-2 mb-4">
+            {Object.values(INTERVALS).map((o) => {
+              const active = interval === o.key;
+              return (
+                <button key={o.key} onClick={() => setInterval(o.key)}
+                  className="text-left px-3 py-2 rounded-lg border transition-colors"
+                  style={active ? { background: "#1D2B4A", borderColor: "#5B8CFF" } : { background: "transparent", borderColor: "#2A3341" }}>
+                  <div className="text-xs font-semibold" style={{ color: active ? "#9DB8FF" : "#B7C0CE" }}>{o.label}</div>
+                  <div className="text-[10px] text-[#7E8899] mt-0.5">{o.key === "1day" ? "ruhig, für Swing" : o.key === "4h" ? "Mittelweg" : "schnell, für Scalping"}</div>
+                </button>
+              );
+            })}
+          </div>
+
+          {interval !== "1day" && (
+            <div className="flex items-start gap-2 bg-[#2A2113] border border-[#4D3B17] rounded-lg px-3 py-2 mb-4">
+              <AlertTriangle size={13} color="#E3A94F" className="mt-0.5 shrink-0" />
+              <p className="text-[10px] text-[#D9B36A] leading-relaxed">
+                Kürzere Zeitrahmen liefern häufiger frische Signale, sind aber <strong>unruhiger</strong>: Die Richtung kippt öfter, es entstehen mehr Fehlsignale und die Spread-Kosten fallen stärker ins Gewicht. Prüfe im Backtest, ob dieser Zeitrahmen bei deinen Instrumenten wirklich besser abschneidet.
+              </p>
+            </div>
+          )}
 
           <label className="text-xs text-[#8C96A8] block mb-2">Trade-Horizont (Abstand von Stop &amp; Ziel, in ATR)</label>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 mb-3">
@@ -324,16 +429,19 @@ export default function ScanView({ market, avKey, setAvKey, tdKey, setTdKey, tra
             })}
           </div>
 
-          {tradeStyle === "scalp" && (
+          {TRADE_STYLES[tradeStyle].tp < 1 && (
             <div className="flex items-start gap-2 bg-[#2A2113] border border-[#4D3B17] rounded-lg px-3 py-2 mb-4">
               <AlertTriangle size={13} color="#E3A94F" className="mt-0.5 shrink-0" />
               <p className="text-[10px] text-[#D9B36A] leading-relaxed">
-                Scalping-Hinweis: Die Analyse basiert auf <strong>Tageskerzen</strong> — echtes Sekunden-/Minuten-Scalping bräuchte Intraday-Daten. Die Level sind hier sehr eng, dadurch fallen Spread &amp; Slippage deutlich stärker ins Gewicht.
+                Achtung: Bei diesem Horizont liegt das Ziel ({TRADE_STYLES[tradeStyle].tp.toLocaleString("de-DE")}× ATR) <strong>innerhalb einer einzigen {iv.label}-Kerze</strong>. Stop und Ziel werden dann oft schon von normalen Schwankungen berührt — der Ausgang ist stark zufallsgetrieben.
+                {interval === "1day" && <> Für so enge Level passt der Zeitrahmen <strong>1 Stunde</strong> deutlich besser.</>}
               </p>
             </div>
           )}
 
-          <label className="text-xs text-[#8C96A8] block mb-2">Watchlist ({market.watchlistNote})</label>
+          <SpreadSettings universe={uni} />
+
+          <label className="text-xs text-[#8C96A8] block mb-2">Watchlist (Twelve Data Free-Tier: 8/Min, 800/Tag)</label>
           <div className="flex flex-wrap gap-2">
             {uni.map((u) => {
               const active = selected.includes(u.pair);
@@ -400,6 +508,49 @@ export default function ScanView({ market, avKey, setAvKey, tdKey, setTdKey, tra
         </div>
       )}
 
+      {/* Tages-Briefing */}
+      {briefing && results.length > 0 && !analyzing && (
+        <div className="mt-4 bg-[#161B22] border border-[#2A3341] rounded-xl p-4">
+          <h3 className="fsd-display text-sm font-semibold text-[#E8ECF2] flex items-center gap-2 mb-2">
+            <Bell size={14} color="#E0A458" /> Was hat sich geändert?
+          </h3>
+          {briefing.neu.length === 0 && briefing.gedreht.length === 0 && briefing.gesprungen.length === 0 ? (
+            <p className="text-[11px] text-[#7E8899]">Keine nennenswerten Änderungen seit dem Scan vom {briefing.seit}.</p>
+          ) : (
+            <div className="flex flex-col gap-1.5 text-[11px]">
+              {briefing.gedreht.map((x) => (
+                <div key={"d" + x.pair} className="flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: "#E3A94F" }} />
+                  <span className="fsd-mono text-[#E8ECF2]">{x.pair}</span>
+                  <span className="text-[#B7C0CE]">Richtungswechsel</span>
+                  <span className="fsd-mono" style={{ color: x.von === "LONG" ? "#3DBB85" : "#E5695A" }}>{x.von}</span>
+                  <span className="text-[#7E8899]">→</span>
+                  <span className="fsd-mono" style={{ color: x.zu === "LONG" ? "#3DBB85" : "#E5695A" }}>{x.zu}</span>
+                </div>
+              ))}
+              {briefing.gesprungen.map((x) => (
+                <div key={"s" + x.pair} className="flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: x.diff > 0 ? "#3DBB85" : "#E5695A" }} />
+                  <span className="fsd-mono text-[#E8ECF2]">{x.pair}</span>
+                  <span className="text-[#B7C0CE]">Score {x.diff > 0 ? "gestiegen" : "gefallen"}</span>
+                  <span className="fsd-mono" style={{ color: x.diff > 0 ? "#3DBB85" : "#E5695A" }}>{x.diff > 0 ? "+" : ""}{Math.round(x.diff)}</span>
+                  <span className="text-[#7E8899]">auf {Math.round(x.c)}</span>
+                </div>
+              ))}
+              {briefing.neu.map((x) => (
+                <div key={"n" + x.pair} className="flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: "#5B8CFF" }} />
+                  <span className="fsd-mono text-[#E8ECF2]">{x.pair}</span>
+                  <span className="text-[#B7C0CE]">neu in der Auswertung</span>
+                  <span className="fsd-mono" style={{ color: x.d === "LONG" ? "#3DBB85" : "#E5695A" }}>{x.d}</span>
+                </div>
+              ))}
+              <p className="text-[10px] text-[#7E8899] mt-1">Verglichen mit dem Scan vom {briefing.seit}.</p>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Top picks */}
       {top3.length > 0 && (
         <div className="mt-6">
@@ -420,7 +571,7 @@ export default function ScanView({ market, avKey, setAvKey, tdKey, setTdKey, tra
             </div>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {top3.map((r, i) => <TopPickCard key={r.pair} result={r} rank={i + 1} style={tradeStyle} live={liveRates[r.pair]} onLog={onLogTrade} />)}
+            {top3.map((r, i) => <TopPickCard key={r.pair} result={r} rank={i + 1} style={tradeStyle} live={liveRates[r.pair]} onLog={onLogTrade} interval={interval} />)}
           </div>
         </div>
       )}
@@ -465,13 +616,13 @@ export default function ScanView({ market, avKey, setAvKey, tdKey, setTdKey, tra
       {results.length === 0 && !analyzing && (
         <div className="mt-10 text-center py-12 border border-dashed border-[#2A3341] rounded-xl">
           <Radio size={28} color="#2E3947" className="mx-auto mb-3" />
-          <p className="text-sm text-[#7E8899]">Trage deinen {market.keyName} ein und starte den ersten Scan,<br />um deine Top-Trade-Vorschläge zu sehen.</p>
+          <p className="text-sm text-[#7E8899]">Trage deinen Twelve-Data-Key ein und starte den ersten Scan,<br />um deine Top-Trade-Vorschläge zu sehen.</p>
         </div>
       )}
 
       {/* Backtest */}
       <div className="mt-10 pt-6 border-t border-[#232B36]">
-        <Backtest market={market} avKey={avKey} tdKey={tdKey} tradeStyle={tradeStyle} selected={selected} />
+        <Backtest market={market} tdKey={tdKey} tradeStyle={tradeStyle} selected={selected} interval={interval} />
       </div>
     </>
   );

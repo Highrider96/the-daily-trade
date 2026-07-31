@@ -28,8 +28,7 @@ export function pruneOldCaches() {
     for (let i = 0; i < localStorage.length; i++) {
       const k = localStorage.key(i);
       if (!k || !k.startsWith("fsd:")) continue;
-      const dated = k.includes(":cache:") || k.includes(":bt:") || k.startsWith("fsd:quota:") || k.startsWith("fsd:tdquota:");
-      // (fsd:hours:cache:… fällt unter ":cache:")
+      const dated = k.includes(":cache:") || k.includes(":bt:") || k.startsWith("fsd:tdquota:");
       if (dated && !k.endsWith(today)) stale.push(k);
     }
     stale.forEach((k) => localStorage.removeItem(k));
@@ -37,13 +36,25 @@ export function pruneOldCaches() {
 }
 
 // ---------- Trade-Horizont ----------
-// Bestimmt, wie viele ATR (mittlere Tagesschwankung) Stop und Ziel entfernt liegen.
+// Bestimmt, wie viele ATR (mittlere Kerzen-Schwankung) Stop und Ziel entfernt liegen.
 export const TRADE_STYLES = {
-  scalp: { label: "Scalping", sl: 0.25, tp: 0.35, desc: "sehr eng · Intraday bis 1–2 Tage" },
-  kurz: { label: "Kurzfristig", sl: 0.8, tp: 1.2, desc: "enge Level · grob 1–4 Handelstage" },
-  swing: { label: "Swing", sl: 1.5, tp: 2.5, desc: "Standard · grob 3–8 Handelstage" },
-  position: { label: "Position", sl: 2.5, tp: 4.5, desc: "weite Level · grob 1–3 Wochen" },
+  scalp: { label: "Scalping", sl: 0.25, tp: 0.35, desc: "sehr enge Level" },
+  kurz: { label: "Kurzfristig", sl: 0.8, tp: 1.2, desc: "enge Level" },
+  swing: { label: "Swing", sl: 1.5, tp: 2.5, desc: "Standard" },
+  position: { label: "Position", sl: 2.5, tp: 4.5, desc: "weite Level" },
 };
+
+// ---------- Zeitrahmen ----------
+// volIdeal: typische ATR in % des Kurses je Kerze — Grundlage des Volatilitäts-
+// Scores. Muss je Zeitrahmen unterschiedlich sein (eine Stundenkerze schwankt
+// naturgemäß viel weniger als eine Tageskerze).
+// unit: Einheit der geschätzten Haltedauer auf den Trade-Karten.
+export const INTERVALS = {
+  "1h": { key: "1h", label: "1 Stunde", short: "1h", bars: 400, btBars: 5000, volIdeal: 0.10, unit: "Stunden", htfLabel: "200-Stunden-Trend" },
+  "4h": { key: "4h", label: "4 Stunden", short: "4h", bars: 300, btBars: 3000, volIdeal: 0.25, unit: "4h-Kerzen", htfLabel: "200×4h-Trend" },
+  "1day": { key: "1day", label: "1 Tag", short: "1T", bars: 250, btBars: 900, volIdeal: 0.60, unit: "Handelstage", htfLabel: "200-Tage-Trend" },
+};
+export const DEFAULT_INTERVAL = "1day";
 
 // ---------- Instrument-Universen ----------
 // dec = Nachkommastellen; pip = Pip-Größe (nur Forex; bei Metallen wird die
@@ -69,49 +80,53 @@ export const METALS_UNIVERSE = [
 ];
 
 // ---------- Markt-Konfiguration ----------
-// provider: "av" = Alpha Vantage (Forex), "td" = Twelve Data (Metalle).
+// Beide Märkte laufen über Twelve Data (800 Anfragen/Tag, 8/Minute).
 export const MARKETS = {
   forex: {
     id: "forex",
     label: "Forex",
     subtitle: "Forex",
     prefix: "fsd",              // Storage-Präfix (rückwärtskompatibel)
-    provider: "av",
-    dailyLimit: 25,
-    reqDelayMs: 13000,
+    reqDelayMs: 8000,
     universe: FOREX_UNIVERSE,
     defaultSelected: ["EUR/USD", "GBP/USD", "USD/JPY", "AUD/USD", "USD/CAD"],
-    dataNote: "kostenlose, verzögerte Alpha-Vantage-Daten",
-    watchlistNote: "Alpha Vantage Free-Tier: 5/Min, 25/Tag",
-    keyName: "Alpha-Vantage-Key",
   },
   metals: {
     id: "metals",
     label: "Metalle",
     subtitle: "Edelmetalle",
     prefix: "fsd:metals",
-    provider: "td",
-    dailyLimit: 800,
     reqDelayMs: 8000,
     universe: METALS_UNIVERSE,
     defaultSelected: ["XAU/USD", "XAG/USD"],
-    dataNote: "kostenlose Twelve-Data-Daten (Gold, Silber, Platin, Palladium)",
-    watchlistNote: "Twelve Data Free-Tier: 8/Min, 800/Tag",
-    keyName: "Twelve-Data-Key",
   },
 };
 
-export const cacheKeyFor = (market, pair) => `${market.prefix}:cache:${pair}:${todayKey()}`;
-export const backtestCacheKey = (market, pair) => `${market.prefix}:bt:${pair}:${todayKey()}`;
+// Cache/Verlauf sind je Markt UND Zeitrahmen getrennt — Scores aus Stunden-
+// und Tagesanalyse dürfen sich nicht vermischen.
+export const cacheKeyFor = (market, pair, interval) => `${market.prefix}:cache:${interval}:${pair}:${todayKey()}`;
+export const backtestCacheKey = (market, pair, interval) => `${market.prefix}:bt:${interval}:${pair}:${todayKey()}`;
 export const watchlistKeyFor = (market) => `${market.prefix}:watchlist`;
-export const historyKeyFor = (market) => `${market.prefix}:history`;
+export const historyKeyFor = (market, interval) => `${market.prefix}:history:${interval}`;
 
-// Wie viele historische Kerzen der Backtest maximal nutzt (~3 Jahre).
-export const BACKTEST_BARS = 800;
-
-export const AV_QUOTA_KEY = () => `fsd:quota:${todayKey()}`;
 export const TD_QUOTA_KEY = () => `fsd:tdquota:${todayKey()}`;
 export const TD_DAILY_LIMIT = 800;
+
+// ---------- Handelskosten ----------
+// Typischer Spread je Instrument in Preis-Einheiten (nicht Pips), als
+// Startwert — in den Einstellungen überschreibbar.
+export const DEFAULT_SPREADS = {
+  "EUR/USD": 0.00010, "GBP/USD": 0.00015, "USD/CHF": 0.00015, "AUD/USD": 0.00015,
+  "USD/CAD": 0.00018, "NZD/USD": 0.00020, "EUR/GBP": 0.00018,
+  "USD/JPY": 0.010, "EUR/JPY": 0.015, "GBP/JPY": 0.020,
+  "XAU/USD": 0.30, "XAG/USD": 0.020, "XPT/USD": 1.50, "XPD/USD": 2.00,
+};
+export const SPREADS_KEY = "fsd:spreads";
+export function getSpread(pair) {
+  const custom = storageGet(SPREADS_KEY) || {};
+  const v = custom[pair];
+  return typeof v === "number" && v >= 0 ? v : (DEFAULT_SPREADS[pair] ?? 0);
+}
 
 // ---------- Math helpers ----------
 export const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
@@ -199,10 +214,19 @@ export const ADX_STRONG = 25;
 // Gewicht des Regime-Bausteins im Gesamtscore (Rest: bisherige Formel).
 const ADX_WEIGHT = 0.2;
 
-// Analysiert Tageskerzen eines Instruments und liefert Scores + Trade-Idee.
-// opts.useAdx=false rechnet den Score wie vor dem Regime-Filter (für A/B-Vergleich).
+// Gewicht des übergeordneten Trends (Multi-Timeframe) im Gesamtscore.
+const HTF_WEIGHT = 0.15;
+// Länge des übergeordneten Trends in Kerzen des aktuellen Zeitrahmens.
+export const HTF_PERIOD = 200;
+
+// Analysiert Kerzen eines Instruments und liefert Scores + Trade-Idee.
+// opts.useAdx / opts.useHtf = false rechnen den Score ohne den jeweiligen
+// Baustein (für A/B-Vergleiche im Backtest).
+// opts.volIdeal: erwartete ATR in % je Kerze des gewählten Zeitrahmens.
 export function analyzePair(candles, inst, opts = {}) {
   const useAdx = opts.useAdx !== false;
+  const useHtf = opts.useHtf !== false;
+  const volIdeal = opts.volIdeal ?? 0.6;
   const closes = candles.map((c) => c.close);
   const lastClose = closes[closes.length - 1];
   const sma20 = computeSMA(closes, 20);
@@ -227,48 +251,85 @@ export function analyzePair(candles, inst, opts = {}) {
   const macdComponent = directionSign > 0 ? (histogram > 0 ? 75 : 25) : histogram < 0 ? 75 : 25;
   const momentumScore = clamp(clamp(50 + rsiAligned * 1.4, 0, 100) * 0.6 + macdComponent * 0.4, 0, 100);
 
+  // Volatilität relativ zum erwarteten Wert des Zeitrahmens bewerten.
   const atrPct = (atr / lastClose) * 100;
-  const volScore = clamp(100 - Math.abs(atrPct - 0.6) * 80, 0, 100);
+  const volScore = clamp(100 - (Math.abs(atrPct - volIdeal) / volIdeal) * 80, 0, 100);
 
   const baseComposite = trendScore * 0.4 + momentumScore * 0.4 + volScore * 0.2;
 
   // Regime: ADX 15 → 0 Punkte, ADX 40 → 100 Punkte.
   const adx = computeADX(candles, 14);
   const adxScore = adx == null ? null : clamp((adx - 15) * 4, 0, 100);
-  const composite = useAdx && adxScore != null
+  let composite = useAdx && adxScore != null
     ? baseComposite * (1 - ADX_WEIGHT) + adxScore * ADX_WEIGHT
     : baseComposite;
 
   const direction = directionSign > 0 ? "LONG" : "SHORT";
-  const entry = lastClose;
 
+  // Übergeordneter Trend (SMA200 desselben Zeitrahmens): Liegt der Kurs
+  // darüber, ist das große Bild aufwärts. Signale gegen dieses Bild werden
+  // abgewertet, Signale in seine Richtung aufgewertet.
+  let htfDirection = null, htfAligned = null, htfScore = null;
+  if (closes.length >= HTF_PERIOD) {
+    const sma200 = computeSMA(closes, HTF_PERIOD);
+    htfDirection = lastClose >= sma200 ? "LONG" : "SHORT";
+    htfAligned = htfDirection === direction;
+    htfScore = htfAligned ? 100 : 0;
+    if (useHtf) composite = composite * (1 - HTF_WEIGHT) + htfScore * HTF_WEIGHT;
+  }
+
+  const entry = lastClose;
   const spark = candles.slice(-100).map((c) => ({ date: c.date, close: c.close }));
 
   return {
     pair: inst.pair, dec: inst.dec, pip: inst.pip,
     trendScore, momentumScore, volScore, adx, adxScore, baseComposite, composite,
+    htfDirection, htfAligned, htfScore,
     direction, entry, atr, rsi, histogram, sma20, sma50, spark,
     lastDate: candles[candles.length - 1].date,
   };
+}
+
+// Entscheidet für EINE Kerze, ob Stop oder Ziel zuerst berührt wurde.
+// Aus OHLC allein ist die Reihenfolge innerhalb der Kerze nicht ableitbar; wir
+// nutzen die übliche Pfad-Annahme: eine steigende Kerze lief zuerst zum Tief,
+// eine fallende zuerst zum Hoch. Das ist fair für beide Seiten — die frühere
+// Regel "im Zweifel Stop" führte bei engen Zielen (Scalping) systematisch zu
+// 100 % Verlusten, weil beide Level in dieselbe Kerze fallen.
+function resolveCandle(c, isLong, stop, target) {
+  const hitStop = isLong ? c.low <= stop : c.high >= stop;
+  const hitTarget = isLong ? c.high >= target : c.low <= target;
+  if (!hitStop && !hitTarget) return null;
+  if (hitStop && !hitTarget) return "loss";
+  if (hitTarget && !hitStop) return "win";
+  // Beide in derselben Kerze → Pfad-Annahme entscheidet.
+  const bullish = c.close >= c.open;
+  const lowFirst = bullish; // steigende Kerze: erst Tief, dann Hoch
+  if (isLong) return lowFirst ? "loss" : "win";
+  return lowFirst ? "win" : "loss"; // Short: Tief zuerst = Ziel zuerst
 }
 
 // Walk-Forward-Backtest: geht chronologisch durch die Historie, bewertet an jedem
 // Tag NUR mit den bis dahin bekannten Kerzen (kein Zukunfts-Blick) und simuliert
 // nacheinander nicht-überlappende Trades mit Stop/Ziel des gewählten Horizonts.
 // Ausstieg: Stop oder Ziel je nachdem, was zuerst berührt wird (Gleichzeitig = Stop).
-// opts.useAdx: Regime-Anteil im Score; opts.minAdx: Trendstärke-Filter;
-// opts.minScore: nur Signale ab diesem Gesamtscore handeln.
+// opts.useAdx / opts.useHtf: Score-Bausteine an/aus; opts.minAdx: Trendstärke-
+// Filter; opts.minScore: nur Signale ab diesem Gesamtscore; opts.htfOnly: nur
+// Signale in Richtung des übergeordneten Trends; opts.spread: Handelskosten in
+// Preis-Einheiten (werden vom Ergebnis abgezogen); opts.volIdeal: Zeitrahmen.
 export function runBacktest(candles, style, inst, opts = {}) {
   const { sl: slMult, tp: tpMult } = TRADE_STYLES[style];
+  const spread = opts.spread || 0;
   const warmup = 55; // genug für SMA50 + MACD/ATR
   const trades = [];
   let skipped = 0;
   let i = warmup;
   while (i < candles.length - 1) {
-    const a = analyzePair(candles.slice(0, i + 1), inst, { useAdx: opts.useAdx });
+    const a = analyzePair(candles.slice(0, i + 1), inst, { useAdx: opts.useAdx, useHtf: opts.useHtf, volIdeal: opts.volIdeal });
     if (!(a.atr > 0)) { i++; continue; }
     if (opts.minAdx != null && a.adx != null && a.adx < opts.minAdx) { skipped++; i++; continue; }
     if (opts.minScore != null && a.composite < opts.minScore) { skipped++; i++; continue; }
+    if (opts.htfOnly && a.htfAligned === false) { skipped++; i++; continue; }
     const isLong = a.direction === "LONG";
     const entry = candles[i].close;
     const risk = slMult * a.atr;
@@ -277,138 +338,57 @@ export function runBacktest(candles, style, inst, opts = {}) {
 
     let j = i + 1, outcome = null;
     for (; j < candles.length; j++) {
-      const c = candles[j];
-      if (isLong) {
-        if (c.low <= stop) { outcome = "loss"; break; }
-        if (c.high >= target) { outcome = "win"; break; }
-      } else {
-        if (c.high >= stop) { outcome = "loss"; break; }
-        if (c.low <= target) { outcome = "win"; break; }
-      }
+      outcome = resolveCandle(candles[j], isLong, stop, target);
+      if (outcome) break;
     }
-    let r;
-    if (outcome === "win") r = tpMult / slMult;
-    else if (outcome === "loss") r = -1;
-    else { // bis Datenende nicht ausgelöst → zum letzten Kurs schließen
+    // Rohergebnis in Preis-Einheiten, dann Handelskosten (ein voller Spread
+    // je Trade: beim Einstieg und beim Ausstieg jeweils die schlechtere Seite).
+    let gross;
+    if (outcome === "win") gross = tpMult * a.atr;
+    else if (outcome === "loss") gross = -risk;
+    else {
       j = candles.length - 1;
       const last = candles[j].close;
-      r = (isLong ? last - entry : entry - last) / risk;
+      gross = isLong ? last - entry : entry - last;
     }
-    trades.push({ pair: inst.pair, entryDate: candles[i].date, exitDate: candles[j].date, direction: a.direction, r, win: r > 0, score: a.composite, adx: a.adx, bars: j - i });
+    const r = (gross - spread) / risk;
+    trades.push({ pair: inst.pair, entryDate: candles[i].date, exitDate: candles[j].date, direction: a.direction, r, win: r > 0, score: a.composite, adx: a.adx, htfAligned: a.htfAligned, bars: j - i });
     i = j + 1; // nächster Trade erst nach dem Schließen
   }
   trades.skipped = skipped;
   return trades;
 }
 
-// ---------- Datenquellen ----------
-// Alpha Vantage FX_DAILY (Forex)
-async function fetchFXDaily(inst, apiKey) {
-  const url = `https://www.alphavantage.co/query?function=FX_DAILY&from_symbol=${inst.from}&to_symbol=${inst.to}&outputsize=compact&apikey=${apiKey}`;
+// ---------- Datenquelle: Twelve Data (einheitlich für alle Märkte) ----------
+// Ein Abruf = 1 Credit. Zeiten kommen in deutscher Zeit zurück, damit
+// Stunden-Zeitrahmen direkt lesbar sind.
+export async function fetchSeries(inst, interval, outputsize, tdKey) {
+  const url = `https://api.twelvedata.com/time_series?symbol=${encodeURIComponent(inst.pair)}`
+    + `&interval=${interval}&outputsize=${outputsize}&timezone=Europe/Berlin&apikey=${tdKey}`;
   let res;
-  try {
-    res = await fetch(url);
-  } catch {
-    throw new Error(`Verbindung zu Alpha Vantage fehlgeschlagen (${inst.pair}). Bitte Internetverbindung prüfen.`);
-  }
-  if (!res.ok) throw new Error(`HTTP-Fehler (${res.status}) beim Laden von ${inst.pair}.`);
-  const data = await res.json();
-  if (data["Note"]) throw new Error("Rate-Limit erreicht: " + data["Note"]);
-  if (data["Information"]) throw new Error(data["Information"]);
-  if (data["Error Message"]) throw new Error("API-Fehler: " + data["Error Message"]);
-  const series = data["Time Series FX (Daily)"];
-  if (!series) throw new Error(`Keine Daten für ${inst.pair} erhalten.`);
-  const dates = Object.keys(series).sort();
-  return dates.map((d) => ({
-    date: d,
-    open: parseFloat(series[d]["1. open"]),
-    high: parseFloat(series[d]["2. high"]),
-    low: parseFloat(series[d]["3. low"]),
-    close: parseFloat(series[d]["4. close"]),
-  }));
-}
-
-// Twelve Data time_series (Metalle; liefert neueste zuerst → umkehren)
-async function fetchTDDaily(inst, tdKey) {
-  const url = `https://api.twelvedata.com/time_series?symbol=${encodeURIComponent(inst.pair)}&interval=1day&outputsize=120&apikey=${tdKey}`;
-  let res;
-  try {
-    res = await fetch(url);
-  } catch {
-    throw new Error(`Verbindung zu Twelve Data fehlgeschlagen (${inst.pair}). Bitte Internetverbindung prüfen.`);
-  }
+  try { res = await fetch(url); } catch { throw new Error(`Verbindung zu Twelve Data fehlgeschlagen (${inst.pair}). Bitte Internetverbindung prüfen.`); }
   if (!res.ok) throw new Error(`Twelve-Data-HTTP-Fehler (${res.status}) bei ${inst.pair}.`);
   const data = await res.json();
   if (data.status === "error") throw new Error(`Twelve Data (${inst.pair}): ` + (data.message || "unbekannter Fehler"));
-  const values = data.values;
-  if (!values || !values.length) throw new Error(`Keine Daten für ${inst.pair} erhalten.`);
-  return values
-    .map((v) => ({
-      date: v.datetime,
-      open: parseFloat(v.open),
-      high: parseFloat(v.high),
-      low: parseFloat(v.low),
-      close: parseFloat(v.close),
-    }))
-    .reverse();
-}
-
-// Wählt die Datenquelle nach Markt-Provider.
-export function fetchDaily(inst, market, keys) {
-  return market.provider === "av"
-    ? fetchFXDaily(inst, keys.avKey)
-    : fetchTDDaily(inst, keys.tdKey);
-}
-
-// Volle Historie (für den Backtest). Ein Aufruf pro Instrument.
-async function fetchFXDailyFull(inst, apiKey) {
-  const url = `https://www.alphavantage.co/query?function=FX_DAILY&from_symbol=${inst.from}&to_symbol=${inst.to}&outputsize=full&apikey=${apiKey}`;
-  let res;
-  try { res = await fetch(url); } catch { throw new Error(`Verbindung zu Alpha Vantage fehlgeschlagen (${inst.pair}).`); }
-  if (!res.ok) throw new Error(`HTTP-Fehler (${res.status}) bei ${inst.pair}.`);
-  const data = await res.json();
-  if (data["Note"]) throw new Error("Rate-Limit erreicht: " + data["Note"]);
-  if (data["Information"]) throw new Error(data["Information"]);
-  if (data["Error Message"]) throw new Error("API-Fehler: " + data["Error Message"]);
-  const series = data["Time Series FX (Daily)"];
-  if (!series) throw new Error(`Keine Daten für ${inst.pair} erhalten.`);
-  return Object.keys(series).sort().map((d) => ({
-    date: d,
-    open: parseFloat(series[d]["1. open"]), high: parseFloat(series[d]["2. high"]),
-    low: parseFloat(series[d]["3. low"]), close: parseFloat(series[d]["4. close"]),
-  }));
-}
-
-async function fetchTDDailyFull(inst, tdKey) {
-  const url = `https://api.twelvedata.com/time_series?symbol=${encodeURIComponent(inst.pair)}&interval=1day&outputsize=${BACKTEST_BARS}&apikey=${tdKey}`;
-  let res;
-  try { res = await fetch(url); } catch { throw new Error(`Verbindung zu Twelve Data fehlgeschlagen (${inst.pair}).`); }
-  if (!res.ok) throw new Error(`Twelve-Data-HTTP-Fehler (${res.status}) bei ${inst.pair}.`);
-  const data = await res.json();
-  if (data.status === "error") throw new Error(`Twelve Data (${inst.pair}): ` + (data.message || "Fehler"));
   if (!data.values || !data.values.length) throw new Error(`Keine Daten für ${inst.pair} erhalten.`);
   return data.values.map((v) => ({
-    date: v.datetime, open: parseFloat(v.open), high: parseFloat(v.high), low: parseFloat(v.low), close: parseFloat(v.close),
-  })).reverse();
+    date: v.datetime,
+    open: parseFloat(v.open), high: parseFloat(v.high), low: parseFloat(v.low), close: parseFloat(v.close),
+  })).reverse(); // Twelve Data liefert neueste zuerst
+}
+
+// Kerzen für den Scan (aktueller Zeitrahmen).
+export function fetchScanSeries(inst, interval, tdKey) {
+  return fetchSeries(inst, interval, INTERVALS[interval].bars, tdKey);
+}
+// Lange Historie für den Backtest.
+export function fetchBacktestSeries(inst, interval, tdKey) {
+  return fetchSeries(inst, interval, INTERVALS[interval].btBars, tdKey);
 }
 
 // ---------- Stundendaten (Handelszeiten-Analyse) ----------
 export const HOURLY_BARS = 5000; // ~7 Monate à 24h × 5 Tage
-
-// Stundenkerzen in deutscher Zeit (Twelve Data liefert die Zeitzone direkt).
-export async function fetchHourly(inst, tdKey) {
-  const url = `https://api.twelvedata.com/time_series?symbol=${encodeURIComponent(inst.pair)}&interval=1h&outputsize=${HOURLY_BARS}&timezone=Europe/Berlin&apikey=${tdKey}`;
-  let res;
-  try { res = await fetch(url); } catch { throw new Error(`Verbindung zu Twelve Data fehlgeschlagen (${inst.pair}).`); }
-  if (!res.ok) throw new Error(`Twelve-Data-HTTP-Fehler (${res.status}) bei ${inst.pair}.`);
-  const data = await res.json();
-  if (data.status === "error") throw new Error(`Twelve Data (${inst.pair}): ` + (data.message || "Fehler"));
-  if (!data.values || !data.values.length) throw new Error(`Keine Stundendaten für ${inst.pair}.`);
-  return data.values.map((v) => ({
-    date: v.datetime,
-    open: parseFloat(v.open), high: parseFloat(v.high), low: parseFloat(v.low), close: parseFloat(v.close),
-  })).reverse();
-}
+export const fetchHourly = (inst, tdKey) => fetchSeries(inst, "1h", HOURLY_BARS, tdKey);
 
 // "2026-07-29 21:00:00" → 21 (Stunde in deutscher Zeit)
 export const hourOf = (s) => parseInt(s.slice(11, 13), 10);
@@ -463,14 +443,8 @@ export function runHourlyBacktest(candles, inst) {
     let j = i + 1, outcome = null;
     const limit = Math.min(candles.length - 1, i + maxHold);
     for (; j <= limit; j++) {
-      const c = candles[j];
-      if (isLong) {
-        if (c.low <= stop) { outcome = "loss"; break; }
-        if (c.high >= target) { outcome = "win"; break; }
-      } else {
-        if (c.high >= stop) { outcome = "loss"; break; }
-        if (c.low <= target) { outcome = "win"; break; }
-      }
+      outcome = resolveCandle(candles[j], isLong, stop, target);
+      if (outcome) break;
     }
     let r;
     if (outcome === "win") r = tpMult;
@@ -481,13 +455,6 @@ export function runHourlyBacktest(candles, inst) {
     i = j + 1; // nicht überlappend
   }
   return trades;
-}
-
-export async function fetchDailyFull(inst, market, keys) {
-  const candles = market.provider === "av"
-    ? await fetchFXDailyFull(inst, keys.avKey)
-    : await fetchTDDailyFull(inst, keys.tdKey);
-  return candles.slice(-BACKTEST_BARS); // auf jüngste ~800 Kerzen kürzen (Speicher)
 }
 
 // ---------- Twelve Data: aktuelle Kurse (Live, für beide Märkte) ----------

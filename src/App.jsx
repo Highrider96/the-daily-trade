@@ -4,25 +4,28 @@ import ScanView from "./ScanView.jsx";
 import InfoPage from "./InfoPage.jsx";
 import Journal from "./Journal.jsx";
 import HourAnalysis from "./HourAnalysis.jsx";
-import { MARKETS, TRADE_STYLES, storageGet, storageSet, pruneOldCaches } from "./engine.js";
+import { MARKETS, TRADE_STYLES, INTERVALS, DEFAULT_INTERVAL, storageGet, storageSet, pruneOldCaches } from "./engine.js";
 
 export default function TheDailyTrade() {
   const [view, setView] = useState("forex"); // forex | metals | trades | hours | info
   const [showSettings, setShowSettings] = useState(true);
   const [journalDraft, setJournalDraft] = useState(null);
-  const [avKey, setAvKeyState] = useState(() => storageGet("fsd:apiKey") ?? "");
   const [tdKey, setTdKeyState] = useState(() => storageGet("fsd:tdKey") ?? "");
   const [tradeStyle, setTradeStyleState] = useState(() => {
     const s = storageGet("fsd:tradeStyle");
     return TRADE_STYLES[s] ? s : "swing";
   });
+  const [interval, setIntervalState] = useState(() => {
+    const s = storageGet("fsd:interval");
+    return INTERVALS[s] ? s : DEFAULT_INTERVAL;
+  });
 
   useEffect(() => { pruneOldCaches(); }, []);
 
-  // API-Keys und Trade-Horizont sind global (einmal eingetragen, für alle Reiter).
-  const setAvKey = (v) => { setAvKeyState(v); storageSet("fsd:apiKey", v); };
+  // API-Key, Trade-Horizont und Zeitrahmen sind global (für alle Reiter).
   const setTdKey = (v) => { setTdKeyState(v); storageSet("fsd:tdKey", v); };
   const setTradeStyle = (v) => { setTradeStyleState(v); storageSet("fsd:tradeStyle", v); };
+  const setInterval = (v) => { setIntervalState(v); storageSet("fsd:interval", v); };
 
   const isScan = view === "forex" || view === "metals";
   const activeMarket = view === "metals" ? MARKETS.metals : MARKETS.forex;
@@ -32,7 +35,7 @@ export default function TheDailyTrade() {
       ? "Handels-Journal & Auswertung"
       : view === "hours"
         ? "Handelszeiten-Analyse"
-        : `Regelbasierte Tages-Analyse · ${activeMarket.subtitle}`;
+        : `Regelbasierte Analyse · ${activeMarket.subtitle} · ${INTERVALS[interval].label}`;
 
   const logTrade = (prefill) => { setJournalDraft(prefill); setView("trades"); };
 
@@ -83,14 +86,14 @@ export default function TheDailyTrade() {
         {view === "hours" && <HourAnalysis tdKey={tdKey} />}
         {isScan && (
           <ScanView
-            key={activeMarket.id}
+            key={activeMarket.id + ":" + interval}
             market={activeMarket}
-            avKey={avKey}
-            setAvKey={setAvKey}
             tdKey={tdKey}
             setTdKey={setTdKey}
             tradeStyle={tradeStyle}
             setTradeStyle={setTradeStyle}
+            interval={interval}
+            setInterval={setInterval}
             showSettings={showSettings}
             setShowSettings={setShowSettings}
             onLogTrade={logTrade}
